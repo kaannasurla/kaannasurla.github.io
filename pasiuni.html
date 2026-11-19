@@ -7,6 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<script>
+  // Aplică tema salvată (sau pe cea a sistemului) înainte să se afișeze pagina
+  (function(){ var t=null; try{ t=localStorage.getItem('tema'); }catch(e){}
+    if(!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t; })();
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-page="pasiuni">

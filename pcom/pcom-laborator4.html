@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<script>
+  // tema se aplică înainte de desenare, ca să nu clipească pagina
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('pcom-theme'); } catch (e) {}
+    if (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<title>PCom Laborator 4 · IPv4 și forwarding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Shantell+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&subset=latin-ext&display=swap">
+<style>
+/* Caiet de matematică cu grilă albastră. Culorile sunt toate aici, ușor de schimbat. */
+:root {
+  color-scheme: light;
+  --paper: #FCFCFB;
+  --grid: #DCE6F5;
+  --ink: #1E2229;
+  --ink-2: #4B5360;
+  --mute: #7D8591;
+  --blue: #1D5FBF;
+  --red: #D03A2F;
+  --green: #2E8B3E;
+  --hi: #CFE0FF;
+  /* culorile nivelurilor, folosite peste tot: încapsulare, Wireshark, OSI */
+  --eth: #7B45B8; --arp: #B0417A; --ip: #1D5FBF; --tcp: #2E8B3E; --udp: #0E8C8C; --app: #D9822B;
+  --k0: #1D5FBF; --k1: #D9822B; --k2: #2E8B3E; --k3: #7B45B8; --k4: #0E8C8C; --k5: #B0417A;
+  --card: #FFFFFF; --card-2: #F4F6F8; --chip: #EEF1F4; --rule: #C5CCD5; --on-blue: #FFFFFF;
+  --r-arp: #FAF0D7; --r-dns: #DAEEFF; --r-http: #E4FFC7; --r-tcp: #E7E6FF; --r-synfin: #DDDDDD; --f-ok: #D9F2DC; --f-bad: #F9D6D3;
+  --hand: "Caveat", "Shantell Sans", "Segoe UI", sans-serif;
+  --body: "Shantell Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 18px;
+  line-height: 1.5;
+  padding-inline: 18px;
+  padding-block: 0 96px;
+}
+a { color: var(--blue); }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.82em; background: var(--chip); padding: 0.05em 0.35em; border-radius: 3px; }
+h1, h2 { font-family: var(--hand); font-weight: 700; margin: 0; line-height: 1; text-wrap: balance; }
+p { margin: 0; }
+
+/* bară sus */
+.top {
+  position: sticky; top: 0; z-index: 5;
+  margin-inline: -18px; padding: 8px 18px;
+  background: var(--paper); border-bottom: 2px solid var(--ink);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px;
+}
+.top b { font-family: var(--hand); font-size: 24px; }
+.top .lab-title { font-size: 20px; font-weight: 600; color: var(--blue); margin-left: 6px; }
+.top nav { order: 3; flex-basis: 100%; overflow-x: auto; display: flex; gap: 4px; }
+.top nav a {
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); text-decoration: none;
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; flex: none;
+}
+.top nav a:hover { background: var(--chip); color: var(--ink); }
+.top nav a.on { background: var(--ink); color: var(--paper); }
+
+.wrap { max-width: 960px; margin: 0 auto; display: grid; gap: 110px; padding-top: 56px; }
+.board { display: grid; gap: 22px; scroll-margin-top: 100px; }
+.board-head { display: grid; gap: 2px; }
+.no { font-family: var(--mono); font-size: 13px; color: var(--mute); letter-spacing: 0.06em; }
+.board h2 { font-size: clamp(2.4rem, 5.4vw, 3.4rem); }
+.board h2 u, .board h3.mini u { text-decoration: none; background: linear-gradient(transparent 62%, var(--hi) 62%, var(--hi) 92%, transparent 92%); }
+.cap { color: var(--ink-2); max-width: 66ch; }
+.board h3.mini { font-family: var(--hand); font-size: clamp(1.8rem, 3.6vw, 2.3rem); line-height: 1; margin: 18px 0 0; }
+
+/* hero */
+.hero { display: grid; gap: 14px; padding-top: 20px; }
+.hero h1 { font-size: clamp(3.4rem, 10vw, 6.6rem); }
+.hero .sub { font-family: var(--hand); font-size: clamp(1.8rem, 4.4vw, 2.6rem); color: var(--blue); }
+.hero .tags { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 14px; color: var(--ink-2); }
+.hero svg { width: 100%; max-width: 760px; height: auto; }
+
+/* diagrame */
+.fig { overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 600px; height: auto; }
+svg text { fill: #1F3155; }
+svg .t { font-family: var(--body); font-size: 15px; }
+svg .ts { font-family: var(--body); font-size: 13px; fill: var(--ink-2); }
+svg .h { font-family: var(--hand); font-size: 26px; font-weight: 700; }
+svg .hs { font-family: var(--hand); font-size: 22px; font-weight: 700; }
+svg .m { font-family: var(--mono); font-size: 13px; }
+svg .ms { font-family: var(--mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .hit { cursor: pointer; }
+
+/* cod */
+.code {
+  background: var(--card); border: 2px solid var(--ink); border-radius: 3px;
+  box-shadow: 4px 4px 0 var(--ink); overflow: hidden; min-width: 0;
+}
+.code .bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 4px 6px 4px 12px; border-bottom: 2px solid var(--ink);
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2); background: var(--card-2); min-height: 30px;
+}
+.code .bar button {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--card); border: 1.5px solid var(--ink);
+  border-radius: 3px; padding: 1px 8px; cursor: pointer;
+}
+.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.55; }
+.code pre code { background: none; padding: 0; font-size: inherit; }
+.code.bad { border-color: var(--red); box-shadow: 4px 4px 0 var(--red); }
+.code.bad .bar { border-color: var(--red); color: var(--red); }
+.code.good { border-color: var(--green); box-shadow: 4px 4px 0 var(--green); }
+.code.good .bar { border-color: var(--green); color: var(--green); }
+.hljs-keyword, .hljs-type, .hljs-built_in { color: #1F5FBF; }
+.hljs-string { color: #2E8B3E; }
+.hljs-comment { color: #858C97; font-style: italic; }
+.hljs-number, .hljs-literal { color: #B35C00; }
+.hljs-title, .hljs-title.function_ { color: #7B45B8; }
+.hljs-meta { color: #C8467F; }
+
+/* cerere adnotată */
+.sig { font-family: var(--mono); font-size: 16px; overflow-x: auto; white-space: nowrap; padding: 6px 2px 10px; line-height: 2; }
+.sig .p { border-bottom: 3px solid; padding-bottom: 2px; }
+.sig .crlf { color: var(--mute); font-size: 13px; margin-left: 4px; }
+.p0 { border-color: var(--k0) !important; } .p1 { border-color: var(--k1) !important; } .p2 { border-color: var(--k2) !important; }
+.p3 { border-color: var(--k3) !important; } .p4 { border-color: var(--k4) !important; } .p5 { border-color: var(--k5) !important; }
+.keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
+.key { display: grid; gap: 2px; font-size: 16px; align-content: start; }
+.key > code { justify-self: start; font-size: 14px; box-shadow: inset 0 -3px var(--c); }
+.key span { color: var(--ink-2); }
+
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; align-items: start; }
+
+/* formule */
+.formula { font-family: var(--hand); font-size: clamp(1.8rem, 4.2vw, 2.4rem); line-height: 1.25; display: grid; gap: 2px; }
+.formula small { font-family: var(--body); font-size: 16px; color: var(--mute); }
+.formula .b { color: var(--blue); } .formula .r { color: var(--red); }
+
+/* tabele */
+.cmds { width: 100%; border-collapse: collapse; font-size: 16px; }
+.cmds td, .cmds th { padding: 8px 10px; border-bottom: 1.5px dashed var(--rule); vertical-align: top; text-align: left; }
+.cmds th { font-family: var(--mono); font-size: 12px; color: var(--mute); font-weight: 400; border-bottom: 2px solid var(--ink); }
+.cmds td:first-child { font-family: var(--hand); font-size: 23px; font-weight: 700; white-space: nowrap; width: 1%; padding-right: 22px; line-height: 1.2; }
+.cmds code { font-size: 14px; white-space: nowrap; }
+.cmds.plain td:first-child { font-family: var(--body); font-size: 16px; font-weight: 400; white-space: normal; width: auto; }
+.tbl { overflow-x: auto; }
+
+/* controale */
+.ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 30px; }
+.ctl { display: grid; gap: 0; font-size: 16px; }
+.ctl output { font-family: var(--hand); font-size: 30px; font-weight: 700; line-height: 1; color: var(--blue); }
+.ctl input[type="range"] { width: 210px; max-width: 100%; accent-color: var(--ink); }
+.ctl input[type="text"] { font-family: var(--mono); font-size: 18px; width: 120px; padding: 3px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); color: var(--ink); }
+.seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; }
+.seg button { font: inherit; font-size: 15px; padding: 4px 12px; border: 0; background: var(--card); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 2px solid var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.btn {
+  font: inherit; font-size: 16px; font-weight: 700; padding: 6px 16px; cursor: pointer;
+  background: var(--hi); color: var(--ink); border: 2px solid var(--ink); border-radius: 3px; box-shadow: 3px 3px 0 var(--ink);
+}
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.ghost { background: var(--card); font-weight: 600; }
+.stat { font-family: var(--hand); font-size: 28px; font-weight: 700; line-height: 1.1; }
+.stat.ok { color: var(--green); } .stat.ko { color: var(--red); } .stat.info { color: var(--blue); }
+
+/* terminal */
+.term {
+  background: #15181D; color: #E6E9EF; border-radius: 4px; padding: 14px 16px; min-height: 120px;
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.55; overflow: auto; box-shadow: 4px 4px 0 var(--ink);
+  white-space: pre;
+}
+.term div { min-height: 1.55em; }
+.term .pr { color: #8A93A0; }
+.term .me { color: #FFFFFF; }
+.term .rx { color: #9CC4FF; }
+.term .ok { color: #9BE29B; }
+.term .an { color: #FFD27F; font-style: italic; }
+.term .er { color: #FF8F8F; }
+.term .cur::after { content: "▌"; color: #9CC4FF; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.chat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.pane { display: grid; gap: 8px; min-width: 0; }
+.pane .lbl { font-family: var(--hand); font-size: 26px; font-weight: 700; line-height: 1; }
+.pane .term { height: 230px; }
+.pane form { display: flex; gap: 8px; }
+.pane input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 14px; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); color: var(--ink); }
+.pane input:disabled { background: var(--chip); }
+
+/* Wireshark de jucărie */
+.ws { border: 2px solid var(--ink); border-radius: 3px; box-shadow: 4px 4px 0 var(--ink); background: var(--card); font-family: var(--mono); font-size: 12.5px; overflow: hidden; }
+.ws-title { padding: 4px 10px; background: var(--ink); color: var(--paper); font-size: 12px; display: flex; justify-content: space-between; gap: 10px; }
+.ws-bar { display: flex; gap: 6px; padding: 6px; border-bottom: 2px solid var(--ink); background: var(--card-2); align-items: center; }
+.ws-bar input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; padding: 4px 8px; border: 1.5px solid var(--mute); border-radius: 3px; background: var(--card); color: var(--ink); }
+.ws-bar input.ok { background: var(--f-ok); border-color: #6FB27A; }
+.ws-bar input.bad { background: var(--f-bad); border-color: #D88A84; }
+.ws-bar button { font: inherit; padding: 3px 10px; border: 1.5px solid var(--ink); border-radius: 3px; background: var(--card); cursor: pointer; }
+.ws-bar .cnt { color: var(--ink-2); white-space: nowrap; }
+.ws-list { height: 238px; overflow: auto; border-bottom: 2px solid var(--ink); }
+.ws-list table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.ws-list th { position: sticky; top: 0; background: var(--card-2); text-align: left; padding: 3px 8px; font-weight: 600; border-bottom: 1px solid var(--rule); z-index: 1; }
+.ws-list td { padding: 2px 8px; cursor: pointer; }
+.ws-list tr.r-arp td { background: var(--r-arp); }
+.ws-list tr.r-dns td { background: var(--r-dns); }
+.ws-list tr.r-http td { background: var(--r-http); }
+.ws-list tr.r-tcp td { background: var(--r-tcp); }
+.ws-list tr.r-synfin td { background: var(--r-synfin); }
+.ws-list tr.sel td { background: var(--blue); color: var(--on-blue); }
+.ws-list tr:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.ws-tree { padding: 6px 10px; border-bottom: 2px solid var(--ink); height: 210px; overflow: auto; }
+.ws-tree details { border-left: 4px solid var(--c); padding-left: 8px; margin: 3px 0; }
+.ws-tree summary { cursor: pointer; white-space: nowrap; }
+.ws-tree summary:hover { background: color-mix(in srgb, var(--c) 14%, transparent); }
+.ws-tree .f { padding-left: 18px; color: var(--ink-2); white-space: nowrap; }
+.ws-bytes { padding: 6px 10px; overflow: auto; white-space: pre; line-height: 1.5; height: 170px; }
+.ws-bytes .off { color: var(--mute); }
+.ws-bytes .by { box-shadow: inset 0 -2px color-mix(in srgb, var(--c) 55%, transparent); }
+.ws-bytes .by.hl { background: color-mix(in srgb, var(--c) 30%, transparent); box-shadow: inset 0 -2px var(--c); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.chips button { font-family: var(--mono); font-size: 13px; padding: 2px 9px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--card); cursor: pointer; color: var(--ink); }
+.chips button:hover { background: var(--hi); }
+.chips span { font-size: 15px; color: var(--ink-2); margin-right: 4px; }
+.lgd { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-size: 13px; }
+.lgd span { display: inline-flex; align-items: center; gap: 6px; }
+.lgd i { width: 14px; height: 14px; border: 2px solid var(--c); background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 45%, transparent) 0 2px, transparent 2px 5px); display: inline-block; }
+
+/* file descriptors */
+.fdtab { display: grid; gap: 6px; }
+.fdrow { display: grid; grid-template-columns: 46px 30px minmax(0, 1fr); align-items: center; gap: 6px; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); cursor: pointer; text-align: left; font: inherit; color: var(--ink); }
+.fdrow b { font-family: var(--hand); font-size: 30px; line-height: 1; color: var(--blue); }
+.fdrow i { font-style: normal; color: var(--mute); }
+.fdrow span { font-family: var(--mono); font-size: 13.5px; }
+.fdrow.std b { color: var(--mute); }
+.fdrow.sock { border-color: var(--udp); }
+.fdrow.sock b { color: var(--udp); }
+.fdrow.sel { box-shadow: 3px 3px 0 var(--red); border-color: var(--red); }
+.fdrow.free { border-style: dashed; color: var(--mute); background: transparent; cursor: default; }
+.fdrow.free b { color: var(--rule); }
+.calllog { font-family: var(--mono); font-size: 13.5px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; padding: 8px 12px; min-height: 120px; max-height: 220px; overflow: auto; white-space: pre; }
+.calllog .ret { color: var(--blue); font-weight: 600; }
+.calllog .err { color: var(--red); font-weight: 600; }
+.fdbtns { display: flex; flex-wrap: wrap; gap: 10px; }
+.fdbtns .btn { font-family: var(--mono); font-size: 13.5px; font-weight: 600; }
+
+.chunks { display: flex; height: 46px; border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; background: var(--card); }
+.chunk { display: grid; place-items: center; font-family: var(--mono); font-size: 11.5px; border-right: 2px solid var(--ink); overflow: hidden; white-space: nowrap;
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 30%, transparent) 0 2px, transparent 2px 6px), var(--card); }
+.chunk:last-child { border-right: 0; }
+.empty-file { display: grid; place-items: center; width: 100%; color: var(--mute); font-family: var(--mono); font-size: 13px; }
+
+/* capcane */
+.traps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 26px; }
+.trap { display: grid; gap: 10px; align-content: start; }
+.trap h3 { font-family: var(--hand); font-size: 30px; margin: 0; line-height: 1.05; }
+.trap h3 span { color: var(--red); }
+.trap h3 code { font-size: 0.6em; }
+.trap.wide { grid-column: 1 / -1; }
+
+/* exerciții */
+.exs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 30px; }
+.exs > li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 4px 8px; align-content: start; padding: 14px 0; border-bottom: 1.5px dashed var(--rule); }
+.exs > li > b { font-family: var(--hand); font-size: 38px; color: var(--blue); line-height: 0.9; grid-row: span 4; }
+.exs h3 { font-family: var(--hand); font-size: 28px; line-height: 1.05; margin: 0; }
+.exs h3 code { background: none; font-size: 0.72em; padding: 0; }
+.exs ul { margin: 0; padding-left: 1.1em; font-size: 16.5px; color: var(--ink-2); }
+.exs .snip { font-family: var(--mono); font-size: 12.5px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; padding: 6px 10px; margin: 4px 0 0; overflow-x: auto; white-space: pre; }
+.exs .q { font-family: var(--hand); font-size: 22px; color: var(--red); line-height: 1.15; }
+
+.note { border-left: 4px solid var(--blue); padding: 4px 0 4px 12px; color: var(--ink-2); font-size: 16px; max-width: 72ch; }
+.note b { color: var(--ink); }
+
+footer { font-size: 15px; color: var(--mute); border-top: 2px solid var(--ink); padding-top: 14px; }
+
+@media (max-width: 760px) {
+  .row2, .traps, .exs, .chat { grid-template-columns: minmax(0, 1fr); }
+  .keys { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* tema întunecată: aceleași variabile, alte valori */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #13161B; --grid: #1E2430;
+  --ink: #E3E7EE; --ink-2: #B3BBC7; --mute: #8A93A2;
+  --blue: #7FB0FF; --red: #FF7F73; --green: #72D283; --hi: #2B3F66;
+  --eth: #B691F2; --arp: #E681B6; --ip: #7FB0FF; --tcp: #72D283; --udp: #52D3D3; --app: #F2A65A;
+  --k0: #7FB0FF; --k1: #F2A65A; --k2: #72D283; --k3: #B691F2; --k4: #52D3D3; --k5: #E681B6;
+  --card: #1B1F27; --card-2: #232934; --chip: #262D39; --rule: #3A4352; --on-blue: #0B1220;
+  --r-arp: #3A3322; --r-dns: #1E3248; --r-http: #283A1D; --r-tcp: #2A2944; --r-synfin: #33363D; --f-ok: #1D3A24; --f-bad: #4A2320;
+}
+html[data-theme="dark"] .hljs-keyword, html[data-theme="dark"] .hljs-type, html[data-theme="dark"] .hljs-built_in { color: #8DB8FF; }
+html[data-theme="dark"] .hljs-string { color: #8FDB9C; }
+html[data-theme="dark"] .hljs-comment { color: #8A93A2; }
+html[data-theme="dark"] .hljs-number, html[data-theme="dark"] .hljs-literal { color: #F2B36E; }
+html[data-theme="dark"] .hljs-title, html[data-theme="dark"] .hljs-title.function_ { color: #C3A2F5; }
+html[data-theme="dark"] .hljs-meta { color: #F08DB8; }
+/* desenele sunt făcute cu cerneală închisă: le inversăm luminozitatea, păstrând nuanțele */
+html[data-theme="dark"] .fig svg, html[data-theme="dark"] .hero svg { filter: invert(0.9) hue-rotate(180deg); --ink-2: #4B5360; }
+html[data-theme="dark"] .term { background: #0B0D11; box-shadow: 4px 4px 0 #3A4352; }
+html[data-theme="dark"] .code, html[data-theme="dark"] .ws { box-shadow: 4px 4px 0 #3A4352; }
+html[data-theme="dark"] .code.bad { box-shadow: 4px 4px 0 var(--red); }
+html[data-theme="dark"] .code.good { box-shadow: 4px 4px 0 var(--green); }
+html[data-theme="dark"] .btn { box-shadow: 3px 3px 0 #3A4352; }
+html[data-theme="dark"] .ws-title { background: #0B0D11; color: var(--ink); }
+
+.theme-btn {
+  order: 2; margin-left: auto; align-self: center;
+  font: inherit; font-size: 14px; font-weight: 600; padding: 3px 12px; cursor: pointer;
+  background: var(--card); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; white-space: nowrap;
+}
+.theme-btn:hover { background: var(--hi); }
+
+/* laboratorul 2: biți, octeți, structuri */
+.bitgroups { display: flex; flex-wrap: wrap; gap: 10px; }
+.bg { display: grid; gap: 4px; justify-items: center; }
+.bg > div { display: flex; gap: 2px; padding: 3px; border: 2px solid var(--c, var(--rule)); border-radius: 3px; background: var(--card); }
+.bg small { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+.bg.pre > div { border-style: dashed; opacity: 0.55; }
+.bg.good small { color: var(--green); font-weight: 600; }
+.bg.badg small { color: var(--red); }
+.bitrows { display: grid; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.bitrow, .byterow { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.bitrow .lbl, .byterow .lbl { font-family: var(--hand); font-size: 23px; font-weight: 700; width: 126px; flex: none; line-height: 1; }
+.bt { display: inline-grid; place-items: center; width: 20px; height: 28px; border: 1.5px solid var(--rule); border-radius: 2px; background: var(--card); font-family: var(--mono); font-size: 14px; }
+.bt.flag { background: color-mix(in srgb, var(--blue) 20%, var(--card)); border-color: var(--blue); color: var(--blue); }
+.bt.stuff { background: color-mix(in srgb, var(--red) 20%, var(--card)); border-color: var(--red); color: var(--red); font-weight: 700; }
+.bt.rm { text-decoration: line-through; opacity: 0.7; }
+.bt.ok { border-color: var(--green); }
+.bt.bad { border: 2px dashed var(--red); color: var(--red); }
+.bitrow .gap { width: 8px; }
+.bytegrid { display: grid; gap: 10px; }
+.by8 { display: inline-grid; place-items: center; min-width: 44px; padding: 2px 5px; border: 2px solid var(--ink-2); border-radius: 3px; background: var(--card); font-family: var(--mono); font-size: 14px; font-weight: 600; line-height: 1.2; }
+.by8 small { font-size: 10.5px; font-weight: 400; color: var(--mute); }
+.by8.ctl { color: var(--blue); }
+.by8.delim { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, var(--card)); }
+.by8.esc { border-color: var(--red); background: color-mix(in srgb, var(--red) 16%, var(--card)); color: var(--red); }
+.by8.ok { border-color: var(--green); }
+.by8.bad { border: 2px dashed var(--red); color: var(--red); }
+.by8.done { opacity: 0.4; }
+.by8.cur { border-color: var(--app); box-shadow: 0 0 0 3px color-mix(in srgb, var(--app) 40%, transparent); }
+.lay { display: grid; grid-template-columns: repeat(22, minmax(0, 1fr)); gap: 3px; }
+.lc { display: grid; place-items: center; aspect-ratio: 1 / 1.15; border: 2px solid var(--c); border-radius: 2px; font-family: var(--mono); font-size: 12px; font-weight: 600;
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 22%, transparent) 0 2px, transparent 2px 6px), var(--card); line-height: 1; }
+.lc small { font-size: 9px; font-weight: 400; color: var(--mute); }
+.lc.pad { border-style: dashed; color: var(--red); background: var(--card); }
+.lc.dle { box-shadow: 0 0 0 3px var(--red); }
+@media (max-width: 760px) {
+  .lay { grid-template-columns: repeat(11, minmax(0, 1fr)); }
+  .bitrow .lbl, .byterow .lbl { width: 100%; }
+}
+
+/* laboratorul 3 */
+button.bt { padding: 0; font-family: var(--mono); font-size: 14px; color: var(--ink); cursor: pointer; }
+button.bt:hover { border-color: var(--ink); }
+.sdkwrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; }
+.sdkcol { display: grid; gap: 8px; align-content: start; }
+.sdkcol .lbl { font-family: var(--hand); font-size: 26px; font-weight: 700; line-height: 1; }
+.sdk { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); width: 100%; max-width: 380px; border: 3px solid var(--ink); background: var(--card); }
+.sc { aspect-ratio: 1; display: grid; place-items: center; font-family: var(--mono); font-size: 16px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); color: var(--ink-2); }
+.sc:nth-child(9n) { border-right: 0; }
+.sc:nth-last-child(-n + 9) { border-bottom: 0; }
+.sc.br { border-right: 2px solid var(--ink); }
+.sc.bb { border-bottom: 2px solid var(--ink); }
+.sc.lost { color: var(--red); font-weight: 700; background: color-mix(in srgb, var(--red) 10%, var(--card)); }
+.sc.gone { color: var(--red); font-weight: 700; background: color-mix(in srgb, var(--red) 18%, var(--card)); }
+.sc.rec { color: var(--green); font-weight: 700; background: color-mix(in srgb, var(--green) 16%, var(--card)); }
+.xdiv { font-family: var(--mono); font-size: 16px; line-height: 1.45; background: var(--card); border: 2px solid var(--ink); border-radius: 3px; padding: 12px 16px; overflow-x: auto; white-space: pre; box-shadow: 4px 4px 0 var(--ink); }
+html[data-theme="dark"] .xdiv { box-shadow: 4px 4px 0 #3A4352; }
+.xdiv .lbl2 { font-family: var(--body); font-size: 14px; color: var(--mute); }
+.xdiv .g { color: var(--blue); font-weight: 600; }
+.xdiv .z { color: var(--mute); opacity: 0.6; }
+.xdiv .z0 { color: var(--ink-2); }
+.xdiv .x { background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.xdiv .r { color: var(--app); font-weight: 700; background: color-mix(in srgb, var(--app) 18%, transparent); }
+.mbar { display: inline-block; vertical-align: middle; width: 140px; height: 10px; border: 1.5px solid var(--rule); border-radius: 2px; margin-left: 8px; overflow: hidden; }
+.mbar i { display: block; height: 100%; }
+@media (max-width: 760px) { .sdkwrap { grid-template-columns: minmax(0, 1fr); } }
+
+/* laboratorul 4 */
+.steplist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.steplist li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 6px; align-items: center; padding: 6px 10px; border: 2px solid var(--rule); border-radius: 3px; background: var(--card); font-size: 16px; color: var(--ink-2); }
+.steplist li b { font-family: var(--hand); font-size: 26px; line-height: 1; color: var(--mute); }
+.steplist li.ok { border-color: var(--green); color: var(--ink); }
+.steplist li.ok b { color: var(--green); }
+.steplist li.next { border-color: var(--app); border-style: dashed; }
+.steplist li.drop { border-color: var(--red); color: var(--ink); background: color-mix(in srgb, var(--red) 10%, var(--card)); }
+.steplist li.drop b, .steplist li em { color: var(--red); }
+.steplist li em { font-style: normal; font-weight: 600; }
+td.chg { color: var(--app); font-weight: 700; }
+td.chg code { box-shadow: inset 0 -2px var(--app); }
+table.lpm tr.best td { background: color-mix(in srgb, var(--green) 16%, transparent); font-weight: 600; }
+table.lpm tr.match td { background: color-mix(in srgb, var(--green) 6%, transparent); }
+table.lpm tr.nomatch td { color: var(--mute); }
+.tag { font-family: var(--mono); font-size: 11px; color: var(--mute); border: 1px solid var(--rule); border-radius: 999px; padding: 0 6px; }
+
+</style>
+</head>
+<body>
+
+<div class="top">
+  <b>PCom · Laborator 4 <span class="lab-title">Nivelul rețea: IPv4 și forwarding</span></b>
+  <button type="button" class="theme-btn" id="themeBtn" aria-pressed="false">☾ mod întunecat</button>
+  <nav aria-label="Table">
+    <a href="#b1" title="Titlu">1</a><a href="#b2" title="De ce IP">2</a><a href="#b3" title="Antetul Ethernet">3</a>
+    <a href="#b4" title="Antetul IPv4">4</a><a href="#b5" title="Adrese și măști">5</a><a href="#b6" title="Checksum IP">6</a>
+    <a href="#b7" title="Procesul de forwarding">7</a><a href="#b8" title="Longest Prefix Match">8</a><a href="#b9" title="LPM în C">9</a>
+    <a href="#b10" title="Mininet">10</a><a href="#b11" title="Capcane">11</a><a href="#b12" title="Exerciții">12</a>
+  </nav>
+</div>
+
+<div class="wrap">
+
+  <!-- 01 -->
+  <section class="board hero" id="b1">
+    <span class="no">PCom · anul 2 · laboratorul 4</span>
+    <h1>De la o rețea la alta</h1>
+    <span class="sub">nivelul rețea: IPv4, tabela de rutare, forwarding</span>
+    <div class="fig"><svg id="dHero" viewBox="0 0 760 170" aria-hidden="true"></svg></div>
+    <div class="tags"><span>IPv4</span><span>prefix · mască</span><span>TTL</span><span>checksum</span><span>longest prefix match</span><span>Mininet</span></div>
+  </section>
+
+  <!-- 02 -->
+  <section class="board" id="b2">
+    <div class="board-head"><span class="no">02</span><h2>De ce nu ajunge <u>Ethernet</u>?</h2></div>
+    <p class="cap">Până acum am trimis date între dispozitive legate direct. Acum vrem să ajungem la dispozitive din <b>alte rețele</b>. În Londra sunt trei calculatoare și un <b>router</b> pe o rețea Ethernet; la fel în București. Routerele sunt legate între ele prin PPP. Host-ul A din Londra vrea să-i trimită ceva lui B, din București.</p>
+    <div class="ctrls">
+      <div class="seg" role="group" aria-label="Varianta">
+        <button type="button" id="hopNoIp" aria-pressed="false">doar Ethernet</button>
+        <button type="button" id="hopIp" aria-pressed="true">cu IP</button>
+      </div>
+      <button class="btn" type="button" id="hopNext">▶ pasul următor</button>
+      <button class="btn ghost" type="button" id="hopReset">de la capăt</button>
+    </div>
+    <div class="fig"><svg id="dHop" viewBox="0 0 760 290" role="img" aria-label="Londra, Paris și București; pachetul trece de la A la B prin trei routere"></svg></div>
+    <div class="byterow" id="hopFrame"></div>
+    <span class="stat" id="hopStat"></span>
+    <p class="note"><b>Ideea:</b> la fiecare legătură, cadrul de nivel 2 se schimbă (Ethernet, apoi PPP, apoi iar Ethernet, cu alte adrese MAC). Datagrama IP din interior rămâne aceeași de la A la B: adresa IP destinație nu se schimbă. Routerele citesc adresa IP și decid pe unde trimit mai departe.</p>
+  </section>
+
+  <!-- 03 -->
+  <section class="board" id="b3">
+    <div class="board-head"><span class="no">03</span><h2>Antetul <u>Ethernet</u>, în C</h2></div>
+    <p class="cap">În laborator lucrăm cu pachete reale din Internet: Ethernet și IP. Cadrele Ethernet le primim ca payload de la implementarea fizică. CRC-ul îl calculează placa de rețea, în hardware, așa că nu apare în antet.</p>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>&lt;net/ethernet.h&gt;</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-c">struct ether_header {
+    uint8_t  ether_dhost[6];  /* MAC destinație, octeții 0–5  */
+    uint8_t  ether_shost[6];  /* MAC sursă,      octeții 6–11 */
+    uint16_t ether_type;      /* octeții 12–13, network order */
+};
+
+#define ETHERTYPE_IP 0x0800    /* singurul tip din laborator */
+
+if (ntohs(eth-&gt;ether_type) == ETHERTYPE_IP) {
+    /* după antetul Ethernet vine antetul IP */
+    struct iphdr *ip = (struct iphdr *)(buf + sizeof(struct ether_header));
+}</code></pre>
+      </div>
+      <div class="fig"><svg id="dEth" viewBox="0 0 420 190" style="min-width:0" role="img" aria-label="Antetul Ethernet: MAC destinație 6 octeți, MAC sursă 6 octeți, EtherType 2 octeți"></svg></div>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section class="board" id="b4">
+    <div class="board-head"><span class="no">04</span><h2>Antetul <u>IPv4</u></h2></div>
+    <p class="cap">IP permite dispozitivelor din rețele diferite să schimbe date prin intermediul routerelor. În laborator ne interesează doar trei câmpuri, colorate mai jos: <b>TTL</b>, <b>checksum</b> și <b>adresa destinație</b>. Apasă pe un câmp.</p>
+    <div class="fig"><svg id="dIp" viewBox="0 0 760 300" role="img" aria-label="Antetul IPv4 pe rânduri de 32 de biți"></svg></div>
+    <p class="note" id="ipInfo" aria-live="polite"></p>
+    <div class="code">
+      <div class="bar"><span>&lt;netinet/ip.h&gt;</span><button type="button" data-copy>Copiază</button></div>
+      <pre><code class="language-c">struct iphdr {
+    uint8_t  ihl:4, version:4;  /* 4 biți fiecare (ordinea e inversată pe little endian) */
+    uint8_t  tos;
+    uint16_t tot_len;
+    uint16_t id;
+    uint16_t frag_off;
+    uint8_t  ttl;               /* îl decrementăm, ca să nu existe bucle infinite */
+    uint8_t  protocol;
+    uint16_t check;             /* îl recalculăm, pentru că am schimbat TTL-ul */
+    uint32_t saddr;
+    uint32_t daddr;             /* destinația pachetului */
+};</code></pre>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section class="board" id="b5">
+    <div class="board-head"><span class="no">05</span><h2>Adrese, prefixe, <u>măști</u></h2></div>
+    <p class="cap">O adresă IP, cum e <code>10.20.30.40</code>, are 32 de biți (în C, un <code>uint32_t</code>). Adresele sunt grupate în blocuri numite <b>rețele</b>, identificate printr-un <b>prefix</b> și o <b>mască</b>. Rețeaua din București, <code>10.20.30.0/24</code>, are masca <code>255.255.255.0</code>: <code>/24</code> = numărul de biți de 1 ai măștii, de la stânga la dreapta. Prefixul se obține cu un AND pe biți: <code>ip &amp; mask</code>.</p>
+    <div class="ctrls">
+      <label class="ctl" for="maIp">adresa IP<input type="text" id="maIp" value="10.20.30.4" maxlength="15" autocomplete="off" spellcheck="false" style="width:200px"></label>
+      <label class="ctl" for="maLen">lungimea măștii <output id="maLenO">/24</output><input type="range" id="maLen" min="0" max="32" value="24"></label>
+    </div>
+    <div class="bitrows" id="maRows"></div>
+    <div class="tbl"><table class="cmds" id="maOut"></table></div>
+  </section>
+
+  <!-- 06 -->
+  <section class="board" id="b6">
+    <div class="board-head"><span class="no">06</span><h2>Checksum-ul <u>IP</u></h2></div>
+    <p class="cap">Checksum-ul acoperă doar antetul: e complementul față de 1 al sumei tuturor cuvintelor de 16 biți din antet. Când routerul scade TTL-ul, antetul se schimbă, deci și checksum-ul trebuie refăcut. Mai jos e antetul unui <code>ping</code> de la host0 la host3. Mută TTL-ul și apasă pe router.</p>
+    <div class="ctrls">
+      <label class="ctl" for="ckTtl">TTL <output id="ckTtlO">64</output><input type="range" id="ckTtl" min="1" max="255" value="64"></label>
+      <button class="btn" type="button" id="ckRoute">▶ routerul: TTL − 1</button>
+    </div>
+    <div class="byterow" id="ckHdr"></div>
+    <div class="xdiv" id="ckSum"></div>
+    <div class="tbl"><table class="cmds plain" id="ckCmp"></table></div>
+    <div style="display:grid; gap:24px">
+      <div class="code">
+        <div class="bar"><span>checksum-ul complet</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-c">/* întoarce checksum-ul în host order */
+uint16_t ip_checksum(const void *hdr, size_t len)
+{
+    const uint8_t *b = hdr;
+    uint32_t sum = 0;
+
+    for (size_t i = 0; i + 1 &lt; len; i += 2)
+        sum += (b[i] &lt;&lt; 8) | b[i + 1];   /* cuvinte big endian */
+    if (len &amp; 1)
+        sum += b[len - 1] &lt;&lt; 8;
+    while (sum &gt;&gt; 16)                      /* transportul se adună */
+        sum = (sum &amp; 0xFFFF) + (sum &gt;&gt; 16); /* înapoi la capăt */
+    return ~sum;
+}
+
+/* verificare: pe un antet corect, rezultatul e 0 */
+if (ip_checksum(ip, sizeof(struct iphdr)) != 0)
+    continue;                              /* aruncăm pachetul */
+
+/* după ce schimbăm TTL-ul */
+ip-&gt;check = 0;
+ip-&gt;check = htons(ip_checksum(ip, sizeof(struct iphdr)));</code></pre>
+      </div>
+      <div style="display:grid; gap:14px; align-content:start">
+        <p class="cap">Pentru că se schimbă doar TTL-ul, checksum-ul se poate actualiza <b>incremental</b>, fără să refaci toată suma (RFC 1624). Notații: <code>HC</code> = checksum-ul vechi, <code>m</code> = cuvântul de 16 biți vechi (TTL și protocol), <code>m'</code> = cuvântul nou.</p>
+        <div class="formula"><span><span class="b">HC'</span> = ~(~HC + ~m + m')</span><small>adunare în complement față de 1: transportul se adună înapoi</small></div>
+        <p class="note"><b>Formula din laborator</b> scrie aceeași idee direct în C, cu un <code>- 1</code> la final. Am testat-o pe un milion de antete aleatoare: în 16 cazuri a dat <code>0xFFFF</code> acolo unde recalcularea completă dă <code>0x0000</code>. Pentru un antet de 20 de octeți, cel mai simplu e să recalculezi tot.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 -->
+  <section class="board" id="b7">
+    <div class="board-head"><span class="no">07</span><h2>Ce face <u>routerul</u> cu un pachet</h2></div>
+    <p class="cap">Routerul trebuie să trimită pachetul la următorul dispozitiv (<b>next hop</b>). Alege un pachet și urmărește-l prin cei opt pași.</p>
+    <div class="ctrls">
+      <div class="seg" role="group" aria-label="Pachetul" id="fwCase"></div>
+      <button class="btn" type="button" id="fwStep">▶ pas</button>
+      <button class="btn ghost" type="button" id="fwAll">toți pașii</button>
+    </div>
+    <div class="row2">
+      <ol class="steplist" id="fwSteps"></ol>
+      <div style="display:grid; gap:10px; align-content:start">
+        <div class="tbl"><table class="cmds plain" id="fwPkt"></table></div>
+        <span class="stat" id="fwStat"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section class="board" id="b8">
+    <div class="board-head"><span class="no">08</span><h2>Longest Prefix <u>Match</u></h2></div>
+    <p class="cap">Tabela de rutare are patru coloane: prefix, next hop, mască, interfață. O populează algoritmii de rutare (nu fac parte din PCom). Pentru o adresă destinație, routerul caută intrările pentru care <code>(dest &amp; mask) == prefix</code> și o alege pe cea <b>mai specifică</b>: masca cea mai lungă. Primele patru rânduri sunt din laborator; pe celelalte le-am adăugat ca să se suprapună.</p>
+    <div class="ctrls">
+      <label class="ctl" for="lpmIn">destinația<input type="text" id="lpmIn" value="192.168.2.200" maxlength="15" autocomplete="off" spellcheck="false" style="width:200px"></label>
+      <div class="chips" id="lpmChips"><span>încearcă:</span></div>
+    </div>
+    <div class="tbl"><table class="cmds plain lpm" id="lpmTab"></table></div>
+    <span class="stat" id="lpmStat"></span>
+  </section>
+
+  <!-- 09 -->
+  <section class="board" id="b9">
+    <div class="board-head"><span class="no">09</span><h2>LPM în <u>C</u></h2></div>
+    <p class="cap">Varianta simplă, O(n): sortezi tabela o singură dată, descrescător după mască (apoi după prefix), și parcurgi de sus în jos. Primul rând care se potrivește e cel mai specific. Tabela e în network order: pentru comparații, trece valorile în host order cu <code>ntohl</code>.</p>
+    <div class="code">
+      <div class="bar"><span>router.c (câmpurile intrării: verifică <code>route_table_entry</code> în lib.h)</span><button type="button" data-copy>Copiază</button></div>
+      <pre><code class="language-c">int cmp_route(const void *a, const void *b)
+{
+    const struct route_table_entry *x = a, *y = b;
+    uint32_t mx = ntohl(x-&gt;mask), my = ntohl(y-&gt;mask);
+
+    if (mx != my)
+        return mx &lt; my ? 1 : -1;          /* masca mai lungă întâi */
+    uint32_t px = ntohl(x-&gt;prefix), py = ntohl(y-&gt;prefix);
+    return px &lt; py ? 1 : (px &gt; py ? -1 : 0);
+}
+
+/* o singură dată, la pornire */
+qsort(rtable, rtable_size, sizeof(struct route_table_entry), cmp_route);
+
+struct route_table_entry *get_best_route(uint32_t ip_dest)
+{
+    for (int i = 0; i &lt; rtable_size; i++)
+        if ((ip_dest &amp; rtable[i].mask) == rtable[i].prefix)
+            return &amp;rtable[i];             /* primul match = cel mai specific */
+    return NULL;                           /* nicio rută: aruncăm pachetul */
+}</code></pre>
+    </div>
+    <p class="note"><b>Față de fragmentul din laborator:</b> comparația folosește <code>rtable[i].mask</code>, masca intrării curente (în fragment apare un <code>mask</code> care nu e definit nicăieri). Sortarea trebuie făcută întâi după mască: dacă sortezi întâi după prefix, primul match nu mai e neapărat cel mai specific. AND-ul pe biți merge direct în network order. Pentru o căutare mai rapidă decât O(n), poți folosi o trie pe biții adresei.</p>
+  </section>
+
+  <!-- 10 -->
+  <section class="board" id="b10">
+    <div class="board-head"><span class="no">10</span><h2>Rețele pe laptop: <u>Mininet</u></h2></div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>instalare (merge și pe WSL 2)</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">sudo apt update
+sudo apt install mininet openvswitch-testcontroller tshark \
+     python3-click python3-scapy xterm python3-pip
+
+# font mai mare în xterm
+echo "xterm*font: *-fixed-*-*-*-18-*" &gt;&gt; ~/.Xresources
+xrdb -merge ~/.Xresources
+
+sudo mn             # test
+pkill ovs-test      # dacă se plânge de controllerul de pe portul 6653</code></pre>
+      </div>
+      <div class="code">
+        <div class="bar"><span>topo.py</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-python">from mininet.topo import Topo
+from mininet.net import Mininet
+from mininet.cli import CLI
+
+class LabTopo(Topo):
+    def build(self):
+        host1 = self.addHost('host1')
+        host2 = self.addHost('host2')
+        router = self.addHost('router')  # aici rulează routerul vostru
+        self.addLink(host2, router)
+        self.addLink(host1, router)
+
+net = Mininet(LabTopo())
+net.start()
+CLI(net)
+net.stop()</code></pre>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>în Mininet</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">sudo python3 topo.py
+mininet&gt; host1 xterm &amp;       # terminal pe host1
+# în terminalul lui host1:
+ip address show               # interfețele și adresele lui
+ping 192.168.0.2              # merge?
+sudo wireshark &amp;              # orice program de pe mașina ta</code></pre>
+      </div>
+      <div class="fig"><svg id="dTopo" viewBox="0 0 420 290" style="min-width:0" role="img" aria-label="Topologia din exerciții: patru hosturi legate la un router"></svg></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="board" id="b11">
+    <div class="board-head"><span class="no">11</span><h2>Capcane</h2></div>
+    <div class="traps">
+      <div class="trap wide">
+        <h3><span>✗</span> compari în network order</h3>
+        <p class="cap">Măștile și prefixele din tabelă sunt în network order. Pentru <code>&lt;</code> și <code>&gt;</code>, treci-le prin <code>ntohl</code>. La fel <code>ether_type</code>: <code>ntohs(eth-&gt;ether_type) == ETHERTYPE_IP</code>. Doar <code>==</code> și AND-ul pe biți merg direct, fără conversie.</p>
+      </div>
+      <div class="trap"><h3><span>✗</span> TTL scăzut sub 1</h3><p class="cap">Verifică TTL-ul <b>înainte</b> să-l scazi: un <code>uint8_t</code> cu valoarea 0, scăzut, devine 255 și pachetul trăiește încă 255 de hop-uri.</p></div>
+      <div class="trap"><h3><span>✗</span> checksum peste câmpul vechi</h3><p class="cap">Când recalculezi, pune întâi <code>ip-&gt;check = 0</code>. Altfel calculezi suma cu tot cu valoarea veche.</p></div>
+      <div class="trap"><h3><span>✗</span> MAC-ul destinației finale</h3><p class="cap">În antetul Ethernet pui MAC-ul <b>next hop</b>-ului, nu al destinației din antetul IP. Destinația IP rămâne aceeași; adresele MAC se schimbă la fiecare hop.</p></div>
+      <div class="trap"><h3><span>✗</span> sortezi la fiecare pachet</h3><p class="cap"><code>qsort</code> o singură dată, la pornire. Apoi doar parcurgi tabela.</p></div>
+      <div class="trap"><h3><span>✗</span> sortezi după prefix</h3><p class="cap">Primul criteriu e masca. Altfel <code>192.168.0.0/16</code> poate ajunge înaintea lui <code>192.168.0.0/24</code>.</p></div>
+      <div class="trap"><h3><span>✗</span> câte adrese are un /24?</h3><p class="cap">De la <code>.0</code> la <code>.255</code> sunt 256 de adrese, nu 255. Prima (rețeaua) și ultima (broadcast) sunt rezervate, deci rămân 254 pentru dispozitive.</p></div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="board" id="b12">
+    <div class="board-head"><span class="no">12</span><h2><u>Exerciții</u></h2></div>
+    <p class="cap">Patru hosturi sunt legate direct la un router (tabla 10). Lucrați în <code>router.c</code>; routerul îl porniți de mână, după <code>make</code>. Detaliile despre schelet, API și pornirea topologiei sunt în README.</p>
+    <div class="code">
+      <div class="bar"><span>schelet</span><button type="button" data-copy>Copiază</button></div>
+      <pre><code class="language-bash">cd pcom-laboratoare-public
+git pull
+cd lab4
+make
+# pornirea topologiei și a routerului: vezi README.md</code></pre>
+    </div>
+    <ol class="exs">
+      <li><b>1</b><h3>Wireshark pe router</h3>
+        <ul>
+          <li>ascultați pe toate cele 4 interfețe ale routerului</li>
+          <li>dați <code>ping</code> de la un host la altul și analizați pachetul primit</li>
+        </ul>
+        <span class="q">Ce protocoale vedeți? Care e în care?</span>
+      </li>
+      <li><b>2</b><h3>Forwarding IPv4</h3>
+        <ul>
+          <li>tabela de rutare e deja citită: <code>rtable[i]</code>, cu <code>rtable_size</code> intrări de tip <code>route_table_entry</code> (lib.h)</li>
+          <li><b>2.1</b> verificați checksum-ul; dacă e greșit, aruncați pachetul</li>
+          <li><b>2.2</b> găsiți next hop-ul și interfața cu LPM</li>
+          <li><b>2.3</b> decrementați TTL-ul; dacă rămâne pozitiv, recalculați checksum-ul</li>
+          <li><b>2.4</b> actualizați antetul Ethernet: MAC-ul next hop-ului din tabela MAC statică (funcțiile din lib.h)</li>
+        </ul>
+        <span class="q">De ce se decrementează TTL-ul?</span>
+      </li>
+      <li><b>?</b><h3>V-ați blocat?</h3>
+        <ul>
+          <li>ping-ul nu trece: Wireshark pe ambele interfețe ale routerului, vedeți unde se oprește</li>
+          <li>pachetul pleacă, dar nu e acceptat: MAC destinație greșit sau checksum greșit</li>
+          <li>ruta greșită: masca comparată în network order, sau tabela sortată după prefix</li>
+          <li>altceva: chemați-mă</li>
+        </ul>
+      </li>
+      <li><b>⌘</b><h3>Fițuică</h3>
+        <ul>
+          <li><code>inet_pton</code>: text → adresă IPv4 binară</li>
+          <li><code>hwaddr_aton</code> (lib.h): text → adresă MAC binară</li>
+          <li><code>get_interface_mac(interface, mac)</code>: MAC-ul unei interfețe a routerului</li>
+          <li>în tabela MAC normal ar scrie ARP; aici e deja completată</li>
+        </ul>
+      </li>
+    </ol>
+    <footer>Sursa: <a href="https://pcom.pages.upb.ro/labs/lab4/lecture.html" target="_blank" rel="noopener">Laboratorul 4 PCom</a> · <a href="https://pcom.pages.upb.ro/labs/lab4/exercises.html" target="_blank" rel="noopener">exercițiile</a> · <a href="https://www.rfc-editor.org/rfc/rfc1624" target="_blank" rel="noopener">RFC 1624 (checksum incremental)</a> · <a href="https://www.rfc-editor.org/rfc/rfc791" target="_blank" rel="noopener">RFC 791 (IPv4)</a></footer>
+  </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  'use strict';
+  if (window.hljs) { try { hljs.highlightAll(); } catch (e) {} }
+
+  const INK = '#24365C', INK2 = '#4F6690', MUTE = '#9AAAC4', BLUE = '#1D5FBF', RED = '#D03A2F', GREEN = '#2E8B3E', ORANGE = '#D9822B', PURPLE = '#7B45B8', FILL = '#E3EDFC';
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const hex = (n, w) => n.toString(16).toUpperCase().padStart(w || 2, '0');
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pen(svg, seed) {
+    const rc = window.rough ? rough.svg(svg) : null;
+    const o = (x) => Object.assign({ roughness: 1.1, bowing: 0.8, strokeWidth: 2, stroke: INK, seed: seed || 3, hachureGap: 5, fillWeight: 1.4 }, x || {});
+    function plain(tag, a, x) {
+      x = o(x);
+      a.stroke = x.stroke; a['stroke-width'] = x.strokeWidth; a.fill = x.fill || 'none';
+      if (x.fill && x.fillStyle !== 'solid') a['fill-opacity'] = 0.28;
+      if (x.strokeLineDash) a['stroke-dasharray'] = x.strokeLineDash.join(' ');
+      return el(tag, a, svg);
+    }
+    const p = {
+      line: (x1, y1, x2, y2, x) => rc ? svg.appendChild(rc.line(x1, y1, x2, y2, o(x))) : plain('line', { x1, y1, x2, y2 }, x),
+      rect: (x0, y0, w, h, x) => rc ? svg.appendChild(rc.rectangle(x0, y0, w, h, o(x))) : plain('rect', { x: x0, y: y0, width: w, height: h }, x),
+      circle: (cx, cy, d, x) => rc ? svg.appendChild(rc.circle(cx, cy, d, o(x))) : plain('circle', { cx, cy, r: d / 2 }, x),
+      poly: (pts, x) => rc ? svg.appendChild(rc.linearPath(pts, o(x))) : plain('polyline', { points: pts.map((q) => q.join(',')).join(' ') }, x),
+      path: (d, x) => rc ? svg.appendChild(rc.path(d, o(x))) : plain('path', { d }, x),
+      text(x, y, s, cls, anchor, fill) {
+        const t = el('text', { x, y, class: cls || 't', 'text-anchor': anchor || 'start' }, svg);
+        if (fill) t.style.fill = fill;
+        t.textContent = s; return t;
+      },
+      arrow(x1, y1, x2, y2, x) {
+        p.line(x1, y1, x2, y2, x);
+        const a = Math.atan2(y2 - y1, x2 - x1), L = 10;
+        p.line(x2, y2, x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45), x);
+        p.line(x2, y2, x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45), x);
+      },
+      clear() { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+    };
+    return p;
+  }
+  function seg(container, items, cur, onPick) {
+    container.innerHTML = '';
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = it.label; b.dataset.v = it.v;
+      b.setAttribute('aria-pressed', String(it.v === cur));
+      b.addEventListener('click', () => {
+        container.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        onPick(it.v);
+      });
+      container.appendChild(b);
+    });
+  }
+  function pair(on, off, cb) {
+    on.addEventListener('click', () => { on.setAttribute('aria-pressed', 'true'); off.setAttribute('aria-pressed', 'false'); cb(true); });
+    off.addEventListener('click', () => { on.setAttribute('aria-pressed', 'false'); off.setAttribute('aria-pressed', 'true'); cb(false); });
+  }
+  // adrese
+  const ip2n = (s) => { const m = String(s).trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/); if (!m) return null; const a = m.slice(1).map(Number); if (a.some((x) => x > 255)) return null; return ((a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3]) >>> 0; };
+  const n2ip = (n) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+  const lenMask = (l) => (l === 0 ? 0 : (0xFFFFFFFF << (32 - l)) >>> 0);
+  const maskLen = (m) => { let c = 0; while (m & 0x80000000) { c++; m = (m << 1) >>> 0; } return c; };
+
+  // ---------- 01 hero ----------
+  (function () {
+    const p = pen($('dHero'), 11);
+    const C = [['Londra', 90, 110], ['Paris', 290, 60], ['Berlin', 470, 110], ['București', 670, 70]];
+    p.line(90, 110, 290, 60, { strokeWidth: 2.4 }); p.line(290, 60, 470, 110, { strokeWidth: 2.4 }); p.line(470, 110, 670, 70, { strokeWidth: 2.4 });
+    p.line(290, 60, 670, 70, { stroke: MUTE, strokeWidth: 1.4, strokeLineDash: [5, 6] });
+    C.forEach(([n, x, y]) => { p.circle(x, y, 26, { fill: FILL, fillStyle: 'solid', strokeWidth: 2 }); p.text(x, y + 36, n, 'hs', 'middle'); });
+    p.rect(150, 74, 70, 22, { stroke: ORANGE, fill: '#FAE6D0', fillStyle: 'solid', strokeWidth: 1.6 });
+    p.text(185, 90, 'dst IP: B', 'ms', 'middle');
+    p.text(380, 160, 'adresa IP destinație rămâne aceeași; fiecare router alege doar următorul pas', 'ts', 'middle');
+  })();
+
+  // ---------- 02 hop by hop ----------
+  (function () {
+    const svg = $('dHop');
+    const N = { A: [60, 230], P2: [120, 260], P3: [180, 230], RL: [200, 120], RP: [380, 60], RB: [560, 120], B: [700, 230], Q2: [640, 260], Q3: [580, 230] };
+    const LINKS = [['A', 'RL', 'Ethernet'], ['RL', 'RP', 'PPP'], ['RP', 'RB', 'PPP'], ['RB', 'B', 'Ethernet']];
+    let ip = true, step = 0;
+    const FR = [
+      { l2: 'Ethernet', d: 'dst MAC = router Londra', s: 'src MAC = A' },
+      { l2: 'PPP', d: 'fără adresă (doar doi pe fir)', s: '' },
+      { l2: 'PPP', d: 'fără adresă', s: '' },
+      { l2: 'Ethernet', d: 'dst MAC = B', s: 'src MAC = router București' }
+    ];
+    function draw() {
+      const p = pen(svg, 13); p.clear();
+      p.rect(14, 90, 240, 190, { stroke: MUTE, strokeLineDash: [6, 6], strokeWidth: 1.4 });
+      p.text(24, 112, 'Londra', 'hs', 'start', INK2);
+      p.rect(506, 90, 240, 190, { stroke: MUTE, strokeLineDash: [6, 6], strokeWidth: 1.4 });
+      p.text(736, 112, 'București', 'hs', 'end', INK2);
+      // LAN-uri
+      [['A', 'P2', 'P3'], ['B', 'Q2', 'Q3']].forEach((g, k) => {
+        const r = k ? N.RB : N.RL;
+        g.forEach((h) => p.line(N[h][0], N[h][1], r[0], r[1], { stroke: MUTE, strokeWidth: 1.4 }));
+      });
+      LINKS.forEach(([a, b, t], i) => {
+        const on = i === step - 1 && (ip || i === 0);
+        p.line(N[a][0], N[a][1], N[b][0], N[b][1], { stroke: on ? ORANGE : INK, strokeWidth: on ? 4 : 2 });
+        if (t === 'PPP') p.text((N[a][0] + N[b][0]) / 2, (N[a][1] + N[b][1]) / 2 - 10, 'PPP', 'ms', 'middle');
+      });
+      const pc = (k, lab, col) => { const [x, y] = N[k]; p.rect(x - 22, y - 14, 44, 28, { stroke: col || INK, strokeWidth: 2, fill: col ? FILL : undefined, fillStyle: 'solid' }); p.text(x, y + 5, lab, 'm', 'middle'); };
+      const rt = (k, lab) => { const [x, y] = N[k]; p.circle(x, y, 40, { fill: '#FAE6D0', fillStyle: 'solid', stroke: ORANGE, strokeWidth: 2 }); p.text(x, y + 5, 'R', 'hs', 'middle'); p.text(x, y - 28, lab, 'ms', 'middle'); };
+      pc('A', 'A', BLUE); pc('P2', ''); pc('P3', ''); pc('B', 'B', GREEN); pc('Q2', ''); pc('Q3', '');
+      rt('RL', 'router'); rt('RP', 'Paris'); rt('RB', 'router');
+      if (!ip && step >= 1) {
+        ['P2', 'P3', 'RL'].forEach((k) => p.text(N[k][0] + (k === 'RL' ? 22 : 26), N[k][1] + (k === 'RL' ? 30 : -6), '✗', 'hs', 'start', RED));
+        p.text(24, 136, '✗ = „nu e MAC-ul meu”', 'ms', 'start', RED);
+      }
+      if (ip && step === 4) p.text(N.B[0], N.B[1] + 34, 'primit ✓', 'ms', 'middle', GREEN);
+    }
+    function frame() {
+      const box = $('hopFrame'), st = $('hopStat');
+      if (step === 0) { box.innerHTML = ''; st.className = 'stat info'; st.textContent = 'apasă „pasul următor”'; return; }
+      if (!ip) {
+        box.innerHTML = '<span class="lbl">pe fir</span><span class="by8 delim">Ethernet<small>dst MAC = B</small></span><span class="by8">date</span>';
+        st.className = 'stat ko'; st.textContent = 'în Londra nimeni nu are adresa MAC a lui B, deci nimeni nu acceptă cadrul. Și chiar dacă routerul l-ar lua, pe legăturile PPP adresa s-ar pierde.';
+        return;
+      }
+      const f = FR[step - 1];
+      box.innerHTML = `<span class="lbl">legătura ${step}</span><span class="by8 ${f.l2 === 'PPP' ? 'esc' : 'delim'}">${f.l2}<small>${esc(f.d)}</small></span><span class="by8 ctl" style="border-color:var(--app)">IP<small>src = A · dst = B</small></span><span class="by8">date</span>`;
+      st.className = 'stat ' + (step === 4 ? 'ok' : 'info');
+      st.textContent = step === 4 ? 'B primește pachetul: aceeași datagramă IP, al patrulea cadru diferit' : (step === 1 ? 'A trimite la router (e în altă rețea decât B)' : 'routerul citește IP-ul destinație și alege următorul hop');
+    }
+    function render() { draw(); frame(); $('hopNext').disabled = ip ? step >= 4 : step >= 1; }
+    $('hopNext').addEventListener('click', () => { step++; render(); });
+    $('hopReset').addEventListener('click', () => { step = 0; render(); });
+    pair($('hopIp'), $('hopNoIp'), (v) => { ip = v; step = 0; render(); });
+    render();
+  })();
+
+  // ---------- 03 Ethernet ----------
+  (function () {
+    const p = pen($('dEth'), 5);
+    const F = [['MAC dest.', 6, PURPLE, '0–5'], ['MAC sursă', 6, PURPLE, '6–11'], ['type', 2, ORANGE, '12–13']];
+    let x = 20; const px = 26;
+    F.forEach(([n, b, c, r]) => {
+      const w = b * px;
+      p.rect(x, 50, w, 56, { stroke: c, fill: c === ORANGE ? '#FAE6D0' : '#E9DFF5', fillStyle: 'solid' });
+      p.text(x + w / 2, 76, n, 'm', 'middle'); p.text(x + w / 2, 96, b + ' octeți', 'ms', 'middle');
+      p.text(x + w / 2, 128, 'octeții ' + r, 'ms', 'middle');
+      x += w;
+    });
+    p.text(20, 30, '14 octeți, apoi antetul IP', 'hs');
+    p.text(20, 164, 'fără CRC: îl verifică placa de rețea', 'ts');
+    p.text(20, 182, '0x0800 = IPv4', 'ms', 'start', ORANGE);
+  })();
+
+  // ---------- 04 IPv4 header ----------
+  (function () {
+    const F = [
+      { r: 0, b: 0, w: 4, n: 'Version', i: 'versiunea protocolului: 4' },
+      { r: 0, b: 4, w: 4, n: 'IHL', i: 'lungimea antetului, în cuvinte de 32 de biți (5 = 20 de octeți)' },
+      { r: 0, b: 8, w: 8, n: 'Type of Service', i: 'tipul serviciului' },
+      { r: 0, b: 16, w: 16, n: 'Total Length', i: 'lungimea totală a pachetului (antet + date), în octeți' },
+      { r: 1, b: 0, w: 16, n: 'Identification', i: 'identificatorul pachetului (folosit la fragmentare)' },
+      { r: 1, b: 16, w: 3, n: 'Flags', i: 'indicatori de fragmentare' },
+      { r: 1, b: 19, w: 13, n: 'Fragment Offset', i: 'poziția fragmentului în pachetul original' },
+      { r: 2, b: 0, w: 8, n: 'TTL', use: true, i: 'Time to Live: fiecare router îl scade cu 1; la 0, pachetul e aruncat. Așa nu circulă la nesfârșit într-o buclă' },
+      { r: 2, b: 8, w: 8, n: 'Protocol', i: 'protocolul de deasupra: 1 = ICMP (ping), 6 = TCP, 17 = UDP' },
+      { r: 2, b: 16, w: 16, n: 'Header Checksum', use: true, i: 'verifică integritatea antetului (doar a antetului). Pentru că routerul schimbă TTL-ul, trebuie recalculat' },
+      { r: 3, b: 0, w: 32, n: 'Source Address', i: 'adresa IP sursă' },
+      { r: 4, b: 0, w: 32, n: 'Destination Address', use: true, i: 'adresa IP destinație: după ea alege routerul ruta (LPM)' }
+    ];
+    let sel = 7;
+    const svg = $('dIp');
+    function render() {
+      const p = pen(svg, 9); p.clear();
+      const x0 = 60, W = 680, bw = W / 32, y0 = 40, rh = 44;
+      for (let b = 0; b <= 32; b += 8) p.text(x0 + b * bw, 26, String(b), 'ms', 'middle');
+      for (let r = 0; r < 5; r++) p.text(x0 - 10, y0 + r * rh + 27, `${r * 4}`, 'ms', 'end');
+      F.forEach((f, k) => {
+        const x = x0 + f.b * bw, y = y0 + f.r * rh, w = f.w * bw, on = k === sel;
+        const col = f.use ? (f.n === 'TTL' ? ORANGE : f.n === 'Header Checksum' ? RED : GREEN) : INK2;
+        const fill = f.use ? (f.n === 'TTL' ? '#FAE6D0' : f.n === 'Header Checksum' ? '#F9D6D3' : '#DDF1E1') : (on ? '#E6E9EE' : undefined);
+        p.rect(x, y, w, rh, { stroke: on ? INK : col, strokeWidth: on ? 3 : f.use ? 2.2 : 1.4, fill, fillStyle: 'solid' });
+        p.text(x + w / 2, y + 22, f.n, w < 70 ? 'ms' : 'm', 'middle', f.use ? INK : INK2);
+        p.text(x + w / 2, y + 37, f.w + ' biți', 'ms', 'middle');
+        const hit = el('rect', { x, y, width: w, height: rh, fill: 'transparent', class: 'hit', tabindex: 0, role: 'button', 'aria-label': f.n }, svg);
+        hit.addEventListener('click', () => { sel = k; render(); });
+        hit.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel = k; render(); } });
+      });
+      p.text(x0, y0 + 5 * rh + 26, '20 de octeți (fără opțiuni) · colorate: câmpurile folosite în laborator', 'ts');
+      const f = F[sel];
+      $('ipInfo').innerHTML = `<b>${f.n}</b> (${f.w} biți): ${esc(f.i)}.`;
+    }
+    render();
+  })();
+
+  // ---------- 05 măști ----------
+  (function () {
+    const ipIn = $('maIp'), lIn = $('maLen');
+    function bits(n, l, cls) {
+      const s = n.toString(2).padStart(32, '0');
+      return [...s].map((c, i) => `<span class="bt ${i < l ? cls : ''}">${c}</span>${i % 8 === 7 && i < 31 ? '<span class="gap"></span>' : ''}`).join('');
+    }
+    function render() {
+      const l = +lIn.value; $('maLenO').textContent = '/' + l;
+      const n = ip2n(ipIn.value);
+      ipIn.style.borderColor = n === null ? 'var(--red)' : '';
+      if (n === null) return;
+      const m = lenMask(l), pre = (n & m) >>> 0, last = (pre | (~m >>> 0)) >>> 0, cnt = 2 ** (32 - l);
+      $('maRows').innerHTML =
+        `<div class="bitrow"><span class="lbl">IP</span>${bits(n, l, 'flag')}<span class="cap">&nbsp;${n2ip(n)}</span></div>` +
+        `<div class="bitrow"><span class="lbl">mască</span>${bits(m, l, 'flag')}<span class="cap">&nbsp;${n2ip(m)}</span></div>` +
+        `<div class="bitrow"><span class="lbl">ip &amp; mask</span>${bits(pre, l, 'ok')}<span class="cap">&nbsp;<b>${n2ip(pre)}</b></span></div>`;
+      $('maOut').innerHTML =
+        `<tr><td>rețeaua</td><td><code>${n2ip(pre)}/${l}</code>: primii ${l} biți fixați, ultimii ${32 - l} liberi</td></tr>` +
+        `<tr><td>adrese</td><td><code>${n2ip(pre)}</code> … <code>${n2ip(last)}</code>: <b>${cnt.toLocaleString('ro-RO')}</b> adrese` + (l <= 30 ? ` (${(cnt - 2).toLocaleString('ro-RO')} pentru dispozitive, fără adresa rețelei și broadcast)` : '') + '</td></tr>';
+    }
+    ipIn.addEventListener('input', render); lIn.addEventListener('input', render); render();
+  })();
+
+  // ---------- 06 checksum IP ----------
+  function csumHost(b) {
+    let s = 0;
+    for (let i = 0; i + 1 < b.length; i += 2) s += (b[i] << 8) | b[i + 1];
+    while (s >>> 16) s = (s & 0xFFFF) + (s >>> 16);
+    return (~s) & 0xFFFF;
+  }
+  const HDR = [0x45, 0x00, 0x00, 0x54, 0x1C, 0x46, 0x40, 0x00, 64, 0x01, 0, 0, 192, 168, 0, 2, 192, 168, 3, 2];
+  function withCheck(h) { const x = h.slice(); x[10] = x[11] = 0; const c = csumHost(x); x[10] = c >> 8; x[11] = c & 255; return x; }
+  (function () {
+    const tIn = $('ckTtl');
+    let hdr, after = null;
+    const NAMES = ['ver/ihl', 'tos', 'len', '', 'id', '', 'flags', '', 'TTL', 'proto', 'check', '', 'src', '', '', '', 'dst', '', '', ''];
+    function build() { const h = HDR.slice(); h[8] = +tIn.value; hdr = withCheck(h); after = null; render(); }
+    function bytesRow(h, prev) {
+      return '<span class="lbl">antetul</span>' + h.map((b, i) => {
+        const cls = i === 8 ? 'delim' : i === 10 || i === 11 ? 'esc' : i >= 16 ? 'ok' : '';
+        const ch = prev && prev[i] !== b ? ' cur' : '';
+        return `<span class="by8 ${cls}${ch}">${hex(b)}<small>${NAMES[i] || '·'}</small></span>`;
+      }).join('');
+    }
+    function sumTrace(h) {
+      const words = []; for (let i = 0; i < 20; i += 2) words.push(i === 10 ? 0 : (h[i] << 8) | h[i + 1]);
+      let s = words.reduce((a, b) => a + b, 0), raw = s, folds = [];
+      while (s >>> 16) { const t = (s & 0xFFFF) + (s >>> 16); folds.push(`${hex(s, 5)} → ${hex(s & 0xFFFF, 4)} + ${hex(s >>> 16)} = ${hex(t, 4)}`); s = t; }
+      return `<span class="lbl2">cuvintele de 16 biți (câmpul check considerat 0)</span>\n` + words.map((w, i) => (i === 5 ? `<span class="z">${hex(w, 4)}</span>` : i === 4 ? `<span class="x">${hex(w, 4)}</span>` : hex(w, 4))).join(' + ') +
+        `\n= ${hex(raw, 5)}\n` + (folds.length ? 'transportul se adună înapoi: ' + folds.join(', ') + '\n' : '') +
+        `complementul: ~${hex(s, 4)} = <span class="r">${hex((~s) & 0xFFFF, 4)}</span>  ← checksum-ul`;
+    }
+    function render() {
+      $('ckTtlO').textContent = tIn.value;
+      const cur = after || hdr;
+      $('ckHdr').innerHTML = bytesRow(cur, after ? hdr : null);
+      $('ckSum').innerHTML = sumTrace(cur);
+      if (!after) {
+        $('ckCmp').innerHTML = `<tr><td>checksum în antet</td><td><code>0x${hex((hdr[10] << 8) | hdr[11], 4)}</code></td></tr><tr><td>verificare</td><td>suma peste tot antetul, cu tot cu check → complement = <code>0x${hex(csumHost(hdr), 4)}</code> ✓</td></tr>`;
+        return;
+      }
+      const HC = (hdr[10] << 8) | hdr[11], m = (hdr[8] << 8) | hdr[9], m2 = (after[8] << 8) | after[9];
+      let s = ((~HC) & 0xFFFF) + ((~m) & 0xFFFF) + m2; while (s >>> 16) s = (s & 0xFFFF) + (s >>> 16);
+      const rfc = (~s) & 0xFFFF;
+      const full = (after[10] << 8) | after[11];
+      // formula din laborator, cu semantica lui C pe o mașină little endian
+      const oldRaw = hdr[10] | (hdr[11] << 8);
+      const labRaw = ((~((~oldRaw) + (~hdr[8]) + after[8])) - 1) & 0xFFFF;
+      const lab = ((labRaw & 255) << 8) | (labRaw >> 8);
+      const ok = (v) => (v === full ? ' ✓' : ' ✗');
+      $('ckCmp').innerHTML =
+        `<thead><tr><th>metoda</th><th>checksum nou</th></tr></thead>` +
+        `<tr><td>recalculare completă</td><td><code>0x${hex(full, 4)}</code></td></tr>` +
+        `<tr><td>incremental (RFC 1624)</td><td><code>0x${hex(rfc, 4)}</code>${ok(rfc)}</td></tr>` +
+        `<tr><td>formula din laborator</td><td><code>0x${hex(lab, 4)}</code>${ok(lab)}</td></tr>`;
+    }
+    $('ckRoute').addEventListener('click', () => {
+      if ((after || hdr)[8] <= 1) return;
+      if (after) { hdr = after; }
+      const h = hdr.slice(); h[8]--; after = withCheck(h);
+      tIn.value = after[8]; $('ckTtlO').textContent = after[8];
+      render();
+    });
+    tIn.addEventListener('input', build);
+    build();
+  })();
+
+  // ---------- tabela de rutare (tablele 7 și 8) ----------
+  const RT = [
+    ['192.168.0.0', '255.255.255.0', '192.168.0.2', 0, true],
+    ['192.168.1.0', '255.255.255.0', '192.168.1.2', 1, true],
+    ['192.168.2.0', '255.255.255.0', '192.168.2.2', 2, true],
+    ['192.168.3.0', '255.255.255.0', '192.168.3.2', 3, true],
+    ['192.168.2.128', '255.255.255.128', '192.168.1.5', 1, false],
+    ['192.168.0.0', '255.255.0.0', '192.168.3.2', 3, false],
+    ['0.0.0.0', '0.0.0.0', '192.168.0.1', 0, false]
+  ].map(([p, m, n, i, lab]) => ({ p: ip2n(p), m: ip2n(m), nh: n, i, lab }));
+  function lpm(d, table) {
+    let best = null;
+    table.forEach((r) => { if (((d & r.m) >>> 0) === r.p && (!best || maskLen(r.m) > maskLen(best.m))) best = r; });
+    return best;
+  }
+
+  // ---------- 07 forwarding ----------
+  (function () {
+    const MAC = { h0: 'de:ad:be:ef:00:00', h3: 'de:ad:be:ef:00:03', r0: 'ca:fe:00:00:00:00', r3: 'ca:fe:00:00:00:03' };
+    const STEPS = [
+      'primește pachetul pe o interfață',
+      'verifică checksum-ul; dacă e greșit, aruncă',
+      'caută next hop-ul în tabela de rutare (LPM)',
+      'dacă nu există nicio rută, aruncă',
+      'scade TTL-ul; dacă a ajuns la 0, aruncă',
+      'recalculează checksum-ul',
+      'MAC sursă = al routerului, MAC destinație = al next hop-ului',
+      'trimite pachetul pe interfața găsită'
+    ];
+    const CASES = [
+      { v: 0, label: 'ping host0 → host3', dst: '192.168.3.2', ttl: 64, bad: false },
+      { v: 1, label: 'checksum stricat', dst: '192.168.3.2', ttl: 64, bad: true },
+      { v: 2, label: 'TTL = 1', dst: '192.168.3.2', ttl: 1, bad: false },
+      { v: 3, label: 'destinație necunoscută', dst: '10.0.0.7', ttl: 64, bad: false }
+    ];
+    const T4 = RT.filter((r) => r.lab);
+    let c = 0, k = 0, pk, prev;
+    function reset() {
+      const C = CASES[c];
+      const h = HDR.slice(); h[8] = C.ttl; const d = ip2n(C.dst); h[16] = d >>> 24; h[17] = (d >>> 16) & 255; h[18] = (d >>> 8) & 255; h[19] = d & 255;
+      const x = withCheck(h); if (C.bad) x[11] ^= 0x04;
+      pk = { in: 0, smac: MAC.h0, dmac: MAC.r0, ttl: x[8], check: (x[10] << 8) | x[11], dst: C.dst, hdr: x, route: null, out: null, drop: null };
+      prev = { ...pk }; k = 0; render();
+    }
+    function doStep() {
+      if (pk.drop || k >= 8) return;
+      prev = { ...pk };
+      const C = CASES[c];
+      switch (k) {
+        case 1: if (csumHost(pk.hdr) !== 0) pk.drop = 'checksum greșit'; break;
+        case 2: pk.route = lpm(ip2n(pk.dst), T4); break;
+        case 3: if (!pk.route) pk.drop = 'nicio rută pentru ' + pk.dst; break;
+        case 4: if (pk.ttl <= 1) pk.drop = 'TTL ar ajunge la 0'; else { pk.ttl--; pk.hdr = pk.hdr.slice(); pk.hdr[8] = pk.ttl; } break;
+        case 5: { pk.hdr = withCheck(pk.hdr); pk.check = (pk.hdr[10] << 8) | pk.hdr[11]; break; }
+        case 6: pk.smac = 'ca:fe:00:00:00:0' + pk.route.i; pk.dmac = 'de:ad:be:ef:00:0' + pk.route.i; break;
+        case 7: pk.out = pk.route.i; break;
+      }
+      void C; k++; render();
+    }
+    function render() {
+      $('fwSteps').innerHTML = STEPS.map((s, i) => {
+        const done = i < k, cur = i === k - 1;
+        const cls = pk.drop && cur ? 'drop' : done ? 'ok' : i === k && !pk.drop ? 'next' : '';
+        return `<li class="${cls}"><b>${i + 1}</b><span>${esc(s)}${pk.drop && cur ? ' <em>→ aruncat: ' + esc(pk.drop) + '</em>' : ''}</span></li>`;
+      }).join('');
+      const ch = (f) => (prev[f] !== pk[f] ? ' class="chg"' : '');
+      const r = pk.route;
+      $('fwPkt').innerHTML =
+        `<thead><tr><th>câmp</th><th>valoare</th></tr></thead>` +
+        `<tr><td>interfața de intrare</td><td>r-${pk.in}</td></tr>` +
+        `<tr><td>Ethernet: MAC sursă</td><td${ch('smac')}><code>${pk.smac}</code></td></tr>` +
+        `<tr><td>Ethernet: MAC dest.</td><td${ch('dmac')}><code>${pk.dmac}</code></td></tr>` +
+        `<tr><td>IP: destinație</td><td><code>${pk.dst}</code></td></tr>` +
+        `<tr><td>IP: TTL</td><td${ch('ttl')}><code>${pk.ttl}</code></td></tr>` +
+        `<tr><td>IP: checksum</td><td${ch('check')}><code>0x${hex(pk.check, 4)}</code></td></tr>` +
+        `<tr><td>ruta (LPM)</td><td${ch('route')}>${k > 2 ? (r ? `<code>${n2ip(r.p)}/${maskLen(r.m)}</code> → next hop <code>${r.nh}</code>, interfața r-${r.i}` : '—') : '…'}</td></tr>` +
+        `<tr><td>interfața de ieșire</td><td${ch('out')}>${pk.out === null ? '…' : 'r-' + pk.out}</td></tr>`;
+      const st = $('fwStat');
+      if (pk.drop) { st.className = 'stat ko'; st.textContent = 'pachet aruncat la pasul ' + k + ': ' + pk.drop; }
+      else if (k >= 8) { st.className = 'stat ok'; st.textContent = `trimis pe r-${pk.out} către ${pk.route.nh}`; }
+      else { st.className = 'stat info'; st.textContent = `pasul ${k} din 8`; }
+      $('fwStep').disabled = $('fwAll').disabled = !!pk.drop || k >= 8;
+    }
+    seg($('fwCase'), CASES, 0, (v) => { c = v; reset(); });
+    $('fwStep').addEventListener('click', doStep);
+    $('fwAll').addEventListener('click', () => { while (!pk.drop && k < 8) doStep(); });
+    reset();
+  })();
+
+  // ---------- 08 LPM ----------
+  (function () {
+    const inp = $('lpmIn');
+    function render() {
+      const d = ip2n(inp.value);
+      inp.style.borderColor = d === null ? 'var(--red)' : '';
+      if (d === null) return;
+      const best = lpm(d, RT);
+      $('lpmTab').innerHTML = '<thead><tr><th>prefix / mască</th><th>next hop</th><th>interfață</th><th>dest &amp; mask</th><th>se potrivește?</th></tr></thead>' +
+        RT.map((r) => {
+          const a = (d & r.m) >>> 0, ok = a === r.p, isB = r === best;
+          return `<tr class="${isB ? 'best' : ok ? 'match' : 'nomatch'}"><td><code>${n2ip(r.p)}/${maskLen(r.m)}</code>${r.lab ? '' : ' <span class="tag">exemplu</span>'}</td><td><code>${r.nh}</code></td><td>${r.i}</td><td><code>${n2ip(a)}</code></td><td>${ok ? (isB ? '✓ cea mai lungă mască' : '✓') : '✗'}</td></tr>`;
+        }).join('');
+      const st = $('lpmStat');
+      const n = RT.filter((r) => ((d & r.m) >>> 0) === r.p).length;
+      if (best) { st.className = 'stat ok'; st.textContent = `${n} rute se potrivesc; câștigă /${maskLen(best.m)}: next hop ${best.nh}, interfața ${best.i}`; }
+      else { st.className = 'stat ko'; st.textContent = 'nicio rută: pachetul e aruncat'; }
+    }
+    ['192.168.2.200', '192.168.2.5', '192.168.7.1', '8.8.8.8', '10.20.30.4'].forEach((a) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = a;
+      b.addEventListener('click', () => { inp.value = a; render(); });
+      $('lpmChips').appendChild(b);
+    });
+    inp.addEventListener('input', render); render();
+  })();
+
+  // ---------- 10 topologia ----------
+  (function () {
+    const p = pen($('dTopo'), 21);
+    const R = [210, 145];
+    const H = [[72, 50, 0], [348, 50, 1], [348, 240, 2], [72, 240, 3]];
+    H.forEach(([x, y, i]) => {
+      p.line(R[0], R[1], x, y, { strokeWidth: 2 });
+      p.rect(x - 64, y - 30, 128, 60, { strokeWidth: 2, fill: FILL, fillStyle: 'solid' });
+      p.text(x, y - 10, 'host' + i, 'hs', 'middle');
+      p.text(x, y + 8, '192.168.' + i + '.2', 'ms', 'middle');
+      p.text(x, y + 23, 'de:ad:be:ef:00:0' + i, 'ms', 'middle');
+      p.text((R[0] + x) / 2 + (x < R[0] ? -6 : 6), (R[1] + y) / 2 + (y < R[1] ? 2 : 12), 'r-' + i, 'ms', x < R[0] ? 'end' : 'start', ORANGE);
+    });
+    p.circle(R[0], R[1], 64, { fill: '#FAE6D0', fillStyle: 'solid', stroke: ORANGE, strokeWidth: 2.4 });
+    p.text(R[0], R[1] + 7, 'router', 'hs', 'middle');
+  })();
+
+  // ---------- mod întunecat ----------
+  const themeBtn = $('themeBtn'), root = document.documentElement;
+  function syncTheme() {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    themeBtn.setAttribute('aria-pressed', String(dark));
+    themeBtn.textContent = dark ? '☀ mod luminos' : '☾ mod întunecat';
+  }
+  themeBtn.addEventListener('click', () => {
+    const dark = root.getAttribute('data-theme') !== 'dark';
+    if (dark) root.setAttribute('data-theme', 'dark'); else root.removeAttribute('data-theme');
+    try { localStorage.setItem('pcom-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    syncTheme();
+  });
+  syncTheme();
+
+  // ---------- copiere ----------
+  document.querySelectorAll('[data-copy]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const code = b.closest('.code').querySelector('code');
+      const sel = () => { const r = document.createRange(); r.selectNodeContents(code); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+      try { navigator.clipboard.writeText(code.innerText).then(() => { b.textContent = 'Copiat'; setTimeout(() => { b.textContent = 'Copiază'; }, 1400); }, sel); } catch (e) { sel(); }
+    });
+  });
+
+  // ---------- tabla curentă ----------
+  const navs = Array.from(document.querySelectorAll('.top nav a'));
+  const boards = Array.from(document.querySelectorAll('.board'));
+  let ticking = false;
+  function markActive() {
+    ticking = false;
+    const line = window.innerHeight / 3; let cur = boards[0];
+    boards.forEach((b) => { if (b.getBoundingClientRect().top <= line) cur = b; });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) cur = boards[boards.length - 1];
+    navs.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + cur.id));
+  }
+  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; setTimeout(markActive, 60); } }, { passive: true });
+  window.addEventListener('resize', markActive);
+  markActive();
+})();
+</script>
+</body>
+</html>

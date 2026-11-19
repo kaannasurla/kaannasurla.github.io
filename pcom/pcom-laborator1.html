@@ -1,0 +1,1693 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<script>
+  // tema se aplică înainte de desenare, ca să nu clipească pagina
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('pcom-theme'); } catch (e) {}
+    if (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<title>PCom Laborator 1 · De la fir la socket</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Shantell+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&subset=latin-ext&display=swap">
+<style>
+/* Caiet de matematică cu grilă albastră. Culorile sunt toate aici, ușor de schimbat. */
+:root {
+  color-scheme: light;
+  --paper: #FCFCFB;
+  --grid: #DCE6F5;
+  --ink: #1E2229;
+  --ink-2: #4B5360;
+  --mute: #7D8591;
+  --blue: #1D5FBF;
+  --red: #D03A2F;
+  --green: #2E8B3E;
+  --hi: #CFE0FF;
+  /* culorile nivelurilor, folosite peste tot: încapsulare, Wireshark, OSI */
+  --eth: #7B45B8; --arp: #B0417A; --ip: #1D5FBF; --tcp: #2E8B3E; --udp: #0E8C8C; --app: #D9822B;
+  --k0: #1D5FBF; --k1: #D9822B; --k2: #2E8B3E; --k3: #7B45B8; --k4: #0E8C8C; --k5: #B0417A;
+  --card: #FFFFFF; --card-2: #F4F6F8; --chip: #EEF1F4; --rule: #C5CCD5; --on-blue: #FFFFFF;
+  --r-arp: #FAF0D7; --r-dns: #DAEEFF; --r-http: #E4FFC7; --r-tcp: #E7E6FF; --r-synfin: #DDDDDD; --f-ok: #D9F2DC; --f-bad: #F9D6D3;
+  --hand: "Caveat", "Shantell Sans", "Segoe UI", sans-serif;
+  --body: "Shantell Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 18px;
+  line-height: 1.5;
+  padding-inline: 18px;
+  padding-block: 0 96px;
+}
+a { color: var(--blue); }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.82em; background: var(--chip); padding: 0.05em 0.35em; border-radius: 3px; }
+h1, h2 { font-family: var(--hand); font-weight: 700; margin: 0; line-height: 1; text-wrap: balance; }
+p { margin: 0; }
+
+/* bară sus */
+.top {
+  position: sticky; top: 0; z-index: 5;
+  margin-inline: -18px; padding: 8px 18px;
+  background: var(--paper); border-bottom: 2px solid var(--ink);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px;
+}
+.top b { font-family: var(--hand); font-size: 24px; }
+.top .lab-title { font-size: 20px; font-weight: 600; color: var(--blue); margin-left: 6px; }
+.top nav { order: 3; flex-basis: 100%; overflow-x: auto; display: flex; gap: 4px; }
+.top nav a {
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); text-decoration: none;
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; flex: none;
+}
+.top nav a:hover { background: var(--chip); color: var(--ink); }
+.top nav a.on { background: var(--ink); color: var(--paper); }
+
+.wrap { max-width: 960px; margin: 0 auto; display: grid; gap: 110px; padding-top: 56px; }
+.board { display: grid; gap: 22px; scroll-margin-top: 100px; }
+.board-head { display: grid; gap: 2px; }
+.no { font-family: var(--mono); font-size: 13px; color: var(--mute); letter-spacing: 0.06em; }
+.board h2 { font-size: clamp(2.4rem, 5.4vw, 3.4rem); }
+.board h2 u, .board h3.mini u { text-decoration: none; background: linear-gradient(transparent 62%, var(--hi) 62%, var(--hi) 92%, transparent 92%); }
+.cap { color: var(--ink-2); max-width: 66ch; }
+.board h3.mini { font-family: var(--hand); font-size: clamp(1.8rem, 3.6vw, 2.3rem); line-height: 1; margin: 18px 0 0; }
+
+/* hero */
+.hero { display: grid; gap: 14px; padding-top: 20px; }
+.hero h1 { font-size: clamp(3.4rem, 10vw, 6.6rem); }
+.hero .sub { font-family: var(--hand); font-size: clamp(1.8rem, 4.4vw, 2.6rem); color: var(--blue); }
+.hero .tags { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 14px; color: var(--ink-2); }
+.hero svg { width: 100%; max-width: 760px; height: auto; }
+
+/* diagrame */
+.fig { overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 600px; height: auto; }
+svg text { fill: #1F3155; }
+svg .t { font-family: var(--body); font-size: 15px; }
+svg .ts { font-family: var(--body); font-size: 13px; fill: var(--ink-2); }
+svg .h { font-family: var(--hand); font-size: 26px; font-weight: 700; }
+svg .hs { font-family: var(--hand); font-size: 22px; font-weight: 700; }
+svg .m { font-family: var(--mono); font-size: 13px; }
+svg .ms { font-family: var(--mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .hit { cursor: pointer; }
+
+/* cod */
+.code {
+  background: var(--card); border: 2px solid var(--ink); border-radius: 3px;
+  box-shadow: 4px 4px 0 var(--ink); overflow: hidden; min-width: 0;
+}
+.code .bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 4px 6px 4px 12px; border-bottom: 2px solid var(--ink);
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2); background: var(--card-2); min-height: 30px;
+}
+.code .bar button {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--card); border: 1.5px solid var(--ink);
+  border-radius: 3px; padding: 1px 8px; cursor: pointer;
+}
+.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.55; }
+.code pre code { background: none; padding: 0; font-size: inherit; }
+.code.bad { border-color: var(--red); box-shadow: 4px 4px 0 var(--red); }
+.code.bad .bar { border-color: var(--red); color: var(--red); }
+.code.good { border-color: var(--green); box-shadow: 4px 4px 0 var(--green); }
+.code.good .bar { border-color: var(--green); color: var(--green); }
+.hljs-keyword, .hljs-type, .hljs-built_in { color: #1F5FBF; }
+.hljs-string { color: #2E8B3E; }
+.hljs-comment { color: #858C97; font-style: italic; }
+.hljs-number, .hljs-literal { color: #B35C00; }
+.hljs-title, .hljs-title.function_ { color: #7B45B8; }
+.hljs-meta { color: #C8467F; }
+
+/* cerere adnotată */
+.sig { font-family: var(--mono); font-size: 16px; overflow-x: auto; white-space: nowrap; padding: 6px 2px 10px; line-height: 2; }
+.sig .p { border-bottom: 3px solid; padding-bottom: 2px; }
+.sig .crlf { color: var(--mute); font-size: 13px; margin-left: 4px; }
+.p0 { border-color: var(--k0) !important; } .p1 { border-color: var(--k1) !important; } .p2 { border-color: var(--k2) !important; }
+.p3 { border-color: var(--k3) !important; } .p4 { border-color: var(--k4) !important; } .p5 { border-color: var(--k5) !important; }
+.keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
+.key { display: grid; gap: 2px; font-size: 16px; align-content: start; }
+.key > code { justify-self: start; font-size: 14px; box-shadow: inset 0 -3px var(--c); }
+.key span { color: var(--ink-2); }
+
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; align-items: start; }
+
+/* formule */
+.formula { font-family: var(--hand); font-size: clamp(1.8rem, 4.2vw, 2.4rem); line-height: 1.25; display: grid; gap: 2px; }
+.formula small { font-family: var(--body); font-size: 16px; color: var(--mute); }
+.formula .b { color: var(--blue); } .formula .r { color: var(--red); }
+
+/* tabele */
+.cmds { width: 100%; border-collapse: collapse; font-size: 16px; }
+.cmds td, .cmds th { padding: 8px 10px; border-bottom: 1.5px dashed var(--rule); vertical-align: top; text-align: left; }
+.cmds th { font-family: var(--mono); font-size: 12px; color: var(--mute); font-weight: 400; border-bottom: 2px solid var(--ink); }
+.cmds td:first-child { font-family: var(--hand); font-size: 23px; font-weight: 700; white-space: nowrap; width: 1%; padding-right: 22px; line-height: 1.2; }
+.cmds code { font-size: 14px; white-space: nowrap; }
+.cmds.plain td:first-child { font-family: var(--body); font-size: 16px; font-weight: 400; white-space: normal; width: auto; }
+.tbl { overflow-x: auto; }
+
+/* controale */
+.ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 30px; }
+.ctl { display: grid; gap: 0; font-size: 16px; }
+.ctl output { font-family: var(--hand); font-size: 30px; font-weight: 700; line-height: 1; color: var(--blue); }
+.ctl input[type="range"] { width: 210px; max-width: 100%; accent-color: var(--ink); }
+.ctl input[type="text"] { font-family: var(--mono); font-size: 18px; width: 120px; padding: 3px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); color: var(--ink); }
+.seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; }
+.seg button { font: inherit; font-size: 15px; padding: 4px 12px; border: 0; background: var(--card); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 2px solid var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.btn {
+  font: inherit; font-size: 16px; font-weight: 700; padding: 6px 16px; cursor: pointer;
+  background: var(--hi); color: var(--ink); border: 2px solid var(--ink); border-radius: 3px; box-shadow: 3px 3px 0 var(--ink);
+}
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.ghost { background: var(--card); font-weight: 600; }
+.stat { font-family: var(--hand); font-size: 28px; font-weight: 700; line-height: 1.1; }
+.stat.ok { color: var(--green); } .stat.ko { color: var(--red); } .stat.info { color: var(--blue); }
+
+/* terminal */
+.term {
+  background: #15181D; color: #E6E9EF; border-radius: 4px; padding: 14px 16px; min-height: 120px;
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.55; overflow: auto; box-shadow: 4px 4px 0 var(--ink);
+  white-space: pre;
+}
+.term div { min-height: 1.55em; }
+.term .pr { color: #8A93A0; }
+.term .me { color: #FFFFFF; }
+.term .rx { color: #9CC4FF; }
+.term .ok { color: #9BE29B; }
+.term .an { color: #FFD27F; font-style: italic; }
+.term .er { color: #FF8F8F; }
+.term .cur::after { content: "▌"; color: #9CC4FF; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.chat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.pane { display: grid; gap: 8px; min-width: 0; }
+.pane .lbl { font-family: var(--hand); font-size: 26px; font-weight: 700; line-height: 1; }
+.pane .term { height: 230px; }
+.pane form { display: flex; gap: 8px; }
+.pane input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 14px; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); color: var(--ink); }
+.pane input:disabled { background: var(--chip); }
+
+/* Wireshark de jucărie */
+.ws { border: 2px solid var(--ink); border-radius: 3px; box-shadow: 4px 4px 0 var(--ink); background: var(--card); font-family: var(--mono); font-size: 12.5px; overflow: hidden; }
+.ws-title { padding: 4px 10px; background: var(--ink); color: var(--paper); font-size: 12px; display: flex; justify-content: space-between; gap: 10px; }
+.ws-bar { display: flex; gap: 6px; padding: 6px; border-bottom: 2px solid var(--ink); background: var(--card-2); align-items: center; }
+.ws-bar input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; padding: 4px 8px; border: 1.5px solid var(--mute); border-radius: 3px; background: var(--card); color: var(--ink); }
+.ws-bar input.ok { background: var(--f-ok); border-color: #6FB27A; }
+.ws-bar input.bad { background: var(--f-bad); border-color: #D88A84; }
+.ws-bar button { font: inherit; padding: 3px 10px; border: 1.5px solid var(--ink); border-radius: 3px; background: var(--card); cursor: pointer; }
+.ws-bar .cnt { color: var(--ink-2); white-space: nowrap; }
+.ws-list { height: 238px; overflow: auto; border-bottom: 2px solid var(--ink); }
+.ws-list table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.ws-list th { position: sticky; top: 0; background: var(--card-2); text-align: left; padding: 3px 8px; font-weight: 600; border-bottom: 1px solid var(--rule); z-index: 1; }
+.ws-list td { padding: 2px 8px; cursor: pointer; }
+.ws-list tr.r-arp td { background: var(--r-arp); }
+.ws-list tr.r-dns td { background: var(--r-dns); }
+.ws-list tr.r-http td { background: var(--r-http); }
+.ws-list tr.r-tcp td { background: var(--r-tcp); }
+.ws-list tr.r-synfin td { background: var(--r-synfin); }
+.ws-list tr.sel td { background: var(--blue); color: var(--on-blue); }
+.ws-list tr:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.ws-tree { padding: 6px 10px; border-bottom: 2px solid var(--ink); height: 210px; overflow: auto; }
+.ws-tree details { border-left: 4px solid var(--c); padding-left: 8px; margin: 3px 0; }
+.ws-tree summary { cursor: pointer; white-space: nowrap; }
+.ws-tree summary:hover { background: color-mix(in srgb, var(--c) 14%, transparent); }
+.ws-tree .f { padding-left: 18px; color: var(--ink-2); white-space: nowrap; }
+.ws-bytes { padding: 6px 10px; overflow: auto; white-space: pre; line-height: 1.5; height: 170px; }
+.ws-bytes .off { color: var(--mute); }
+.ws-bytes .by { box-shadow: inset 0 -2px color-mix(in srgb, var(--c) 55%, transparent); }
+.ws-bytes .by.hl { background: color-mix(in srgb, var(--c) 30%, transparent); box-shadow: inset 0 -2px var(--c); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.chips button { font-family: var(--mono); font-size: 13px; padding: 2px 9px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--card); cursor: pointer; color: var(--ink); }
+.chips button:hover { background: var(--hi); }
+.chips span { font-size: 15px; color: var(--ink-2); margin-right: 4px; }
+.lgd { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-size: 13px; }
+.lgd span { display: inline-flex; align-items: center; gap: 6px; }
+.lgd i { width: 14px; height: 14px; border: 2px solid var(--c); background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 45%, transparent) 0 2px, transparent 2px 5px); display: inline-block; }
+
+/* file descriptors */
+.fdtab { display: grid; gap: 6px; }
+.fdrow { display: grid; grid-template-columns: 46px 30px minmax(0, 1fr); align-items: center; gap: 6px; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); cursor: pointer; text-align: left; font: inherit; color: var(--ink); }
+.fdrow b { font-family: var(--hand); font-size: 30px; line-height: 1; color: var(--blue); }
+.fdrow i { font-style: normal; color: var(--mute); }
+.fdrow span { font-family: var(--mono); font-size: 13.5px; }
+.fdrow.std b { color: var(--mute); }
+.fdrow.sock { border-color: var(--udp); }
+.fdrow.sock b { color: var(--udp); }
+.fdrow.sel { box-shadow: 3px 3px 0 var(--red); border-color: var(--red); }
+.fdrow.free { border-style: dashed; color: var(--mute); background: transparent; cursor: default; }
+.fdrow.free b { color: var(--rule); }
+.calllog { font-family: var(--mono); font-size: 13.5px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; padding: 8px 12px; min-height: 120px; max-height: 220px; overflow: auto; white-space: pre; }
+.calllog .ret { color: var(--blue); font-weight: 600; }
+.calllog .err { color: var(--red); font-weight: 600; }
+.fdbtns { display: flex; flex-wrap: wrap; gap: 10px; }
+.fdbtns .btn { font-family: var(--mono); font-size: 13.5px; font-weight: 600; }
+
+.chunks { display: flex; height: 46px; border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; background: var(--card); }
+.chunk { display: grid; place-items: center; font-family: var(--mono); font-size: 11.5px; border-right: 2px solid var(--ink); overflow: hidden; white-space: nowrap;
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 30%, transparent) 0 2px, transparent 2px 6px), var(--card); }
+.chunk:last-child { border-right: 0; }
+.empty-file { display: grid; place-items: center; width: 100%; color: var(--mute); font-family: var(--mono); font-size: 13px; }
+
+/* capcane */
+.traps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 26px; }
+.trap { display: grid; gap: 10px; align-content: start; }
+.trap h3 { font-family: var(--hand); font-size: 30px; margin: 0; line-height: 1.05; }
+.trap h3 span { color: var(--red); }
+.trap h3 code { font-size: 0.6em; }
+.trap.wide { grid-column: 1 / -1; }
+
+/* exerciții */
+.exs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 30px; }
+.exs > li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 4px 8px; align-content: start; padding: 14px 0; border-bottom: 1.5px dashed var(--rule); }
+.exs > li > b { font-family: var(--hand); font-size: 38px; color: var(--blue); line-height: 0.9; grid-row: span 4; }
+.exs h3 { font-family: var(--hand); font-size: 28px; line-height: 1.05; margin: 0; }
+.exs h3 code { background: none; font-size: 0.72em; padding: 0; }
+.exs ul { margin: 0; padding-left: 1.1em; font-size: 16.5px; color: var(--ink-2); }
+.exs .snip { font-family: var(--mono); font-size: 12.5px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; padding: 6px 10px; margin: 4px 0 0; overflow-x: auto; white-space: pre; }
+.exs .q { font-family: var(--hand); font-size: 22px; color: var(--red); line-height: 1.15; }
+
+.note { border-left: 4px solid var(--blue); padding: 4px 0 4px 12px; color: var(--ink-2); font-size: 16px; max-width: 72ch; }
+.note b { color: var(--ink); }
+
+footer { font-size: 15px; color: var(--mute); border-top: 2px solid var(--ink); padding-top: 14px; }
+
+@media (max-width: 760px) {
+  .row2, .traps, .exs, .chat { grid-template-columns: minmax(0, 1fr); }
+  .keys { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* tema întunecată: aceleași variabile, alte valori */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #13161B; --grid: #1E2430;
+  --ink: #E3E7EE; --ink-2: #B3BBC7; --mute: #8A93A2;
+  --blue: #7FB0FF; --red: #FF7F73; --green: #72D283; --hi: #2B3F66;
+  --eth: #B691F2; --arp: #E681B6; --ip: #7FB0FF; --tcp: #72D283; --udp: #52D3D3; --app: #F2A65A;
+  --k0: #7FB0FF; --k1: #F2A65A; --k2: #72D283; --k3: #B691F2; --k4: #52D3D3; --k5: #E681B6;
+  --card: #1B1F27; --card-2: #232934; --chip: #262D39; --rule: #3A4352; --on-blue: #0B1220;
+  --r-arp: #3A3322; --r-dns: #1E3248; --r-http: #283A1D; --r-tcp: #2A2944; --r-synfin: #33363D; --f-ok: #1D3A24; --f-bad: #4A2320;
+}
+html[data-theme="dark"] .hljs-keyword, html[data-theme="dark"] .hljs-type, html[data-theme="dark"] .hljs-built_in { color: #8DB8FF; }
+html[data-theme="dark"] .hljs-string { color: #8FDB9C; }
+html[data-theme="dark"] .hljs-comment { color: #8A93A2; }
+html[data-theme="dark"] .hljs-number, html[data-theme="dark"] .hljs-literal { color: #F2B36E; }
+html[data-theme="dark"] .hljs-title, html[data-theme="dark"] .hljs-title.function_ { color: #C3A2F5; }
+html[data-theme="dark"] .hljs-meta { color: #F08DB8; }
+/* desenele sunt făcute cu cerneală închisă: le inversăm luminozitatea, păstrând nuanțele */
+html[data-theme="dark"] .fig svg, html[data-theme="dark"] .hero svg { filter: invert(0.9) hue-rotate(180deg); --ink-2: #4B5360; }
+html[data-theme="dark"] .term { background: #0B0D11; box-shadow: 4px 4px 0 #3A4352; }
+html[data-theme="dark"] .code, html[data-theme="dark"] .ws { box-shadow: 4px 4px 0 #3A4352; }
+html[data-theme="dark"] .code.bad { box-shadow: 4px 4px 0 var(--red); }
+html[data-theme="dark"] .code.good { box-shadow: 4px 4px 0 var(--green); }
+html[data-theme="dark"] .btn { box-shadow: 3px 3px 0 #3A4352; }
+html[data-theme="dark"] .ws-title { background: #0B0D11; color: var(--ink); }
+
+.theme-btn {
+  order: 2; margin-left: auto; align-self: center;
+  font: inherit; font-size: 14px; font-weight: 600; padding: 3px 12px; cursor: pointer;
+  background: var(--card); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; white-space: nowrap;
+}
+.theme-btn:hover { background: var(--hi); }
+
+</style>
+</head>
+<body>
+
+<div class="top">
+  <b>PCom · Laborator 1 <span class="lab-title">Nivelul fizic, Internetul și primele unelte</span></b>
+  <button type="button" class="theme-btn" id="themeBtn" aria-pressed="false">☾ mod întunecat</button>
+  <nav aria-label="Table">
+    <a href="#b1" title="Titlu">1</a><a href="#b2" title="Ce e un protocol">2</a><a href="#b3" title="Nivelul fizic">3</a>
+    <a href="#b4" title="Biți pe fir">4</a><a href="#b5" title="Internetul și RFC-urile">5</a><a href="#b6" title="OSI vs TCP/IP">6</a>
+    <a href="#b7" title="Încapsulare">7</a><a href="#b8" title="HTTP de mână">8</a><a href="#b9" title="Server cu netcat">9</a>
+    <a href="#b10" title="Wireshark">10</a><a href="#b11" title="tcpdump">11</a><a href="#b12" title="Compilare și debugging">12</a>
+    <a href="#b13" title="File descriptors">13</a><a href="#b14" title="UDP">14</a><a href="#b15" title="Capcane">15</a>
+    <a href="#b16" title="Exerciții">16</a>
+  </nav>
+</div>
+
+<div class="wrap">
+
+  <!-- 01 -->
+  <section class="board hero" id="b1">
+    <span class="no">PCom · anul 2 · laboratorul 1</span>
+    <h1>Protocoale de comunicație</h1>
+    <span class="sub">de la fir la socket</span>
+    <div class="fig"><svg id="dHero" viewBox="0 0 760 150" aria-hidden="true"></svg></div>
+    <div class="tags"><span>nivelul fizic</span><span>OSI · TCP/IP</span><span>telnet</span><span>netcat</span><span>Wireshark</span><span>tcpdump</span><span>file descriptors</span></div>
+  </section>
+
+  <!-- 02 -->
+  <section class="board" id="b2">
+    <div class="board-head"><span class="no">02</span><h2>Ce este un <u>protocol</u>?</h2></div>
+    <p class="cap">Un protocol e un set de reguli bine definite, pe care ambele părți le respectă cât timp comunică. Și oamenii folosesc protocoale, doar că nu le scriu nicăieri.</p>
+    <div class="fig"><svg id="dProto" viewBox="0 0 760 370" role="img" aria-label="Două diagrame de mesaje: o convorbire la telefon între Ana și Bogdan și o cerere HTTP între browser și server"></svg></div>
+    <div class="keys">
+      <div class="key" style="--c:var(--k0)"><code>sintaxă</code><span>cum arată fiecare mesaj (format, câmpuri, ordinea lor)</span></div>
+      <div class="key" style="--c:var(--k1)"><code>semantică</code><span>ce înseamnă fiecare mesaj și ce trebuie să faci când îl primești</span></div>
+      <div class="key" style="--c:var(--k2)"><code>ordine</code><span>cine vorbește primul, cine răspunde, ce faci când ceva se pierde</span></div>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section class="board" id="b3">
+    <div class="board-head"><span class="no">03</span><h2>Nivelul <u>fizic</u></h2></div>
+    <p class="cap">Protocoalele și tehnicile prin care informația trece efectiv printr-un <b>mediu de transmisie</b> (legătura, „link”-ul). Bitul trebuie pus pe ceva care se poate măsura la celălalt capăt.</p>
+    <div class="fig"><svg id="dMedia" viewBox="0 0 760 250" role="img" aria-label="Patru medii de transmisie: cablu electric, fibră optică, wireless și semnale de fum"></svg></div>
+  </section>
+
+  <!-- 04 -->
+  <section class="board" id="b4">
+    <div class="board-head"><span class="no">04</span><h2>Biți pe <u>fir</u></h2></div>
+    <p class="cap">Emițătorul pune <b>5 V</b> pentru un 1 și <b>0 V</b> pentru un 0, câte un bit la fiecare <i>T</i> ms. Receptorul măsoară tensiunea tot la fiecare <i>T</i> ms (punctele). Scrie ceva și uită-te ce trece prin cablu.</p>
+    <div class="ctrls">
+      <label class="ctl" for="wTxt">mesaj (max 4 caractere ASCII)<input type="text" id="wTxt" value="Hi" maxlength="4" autocomplete="off" spellcheck="false"></label>
+      <label class="ctl" for="wT">durata unui bit <output id="wTo">1 ms</output><input type="range" id="wT" min="1" max="10" value="1"></label>
+      <div class="seg" role="group" aria-label="Ceasul receptorului">
+        <button type="button" id="wSync" aria-pressed="true">ceasuri sincronizate</button>
+        <button type="button" id="wDrift" aria-pressed="false">receptor cu 12% mai lent</button>
+      </div>
+    </div>
+    <div class="fig"><svg id="dWire" viewBox="0 0 760 250" role="img" aria-label="Semnalul electric de pe fir pentru mesajul ales și biții citiți de receptor"></svg></div>
+    <span class="stat" id="wVerd"></span>
+    <div class="formula">
+      <span><span class="b">rata de biți</span> = biți / secundă</span>
+      <small id="wRate"></small>
+    </div>
+    <p class="note"><b>De ce contează ceasul?</b> Dacă emițătorul și receptorul nu numără timpul la fel, receptorul măsoară în locuri greșite și citește alți biți. De asta protocoalele reale trimit și informație de sincronizare: Ethernet, de exemplu, pune în fața fiecărui cadru un <i>preambul</i> de biți alternanți.</p>
+  </section>
+
+  <!-- 05 -->
+  <section class="board" id="b5">
+    <div class="board-head"><span class="no">05</span><h2>Internetul, pe <u>scurt</u></h2></div>
+    <p class="cap">La început, la sfârșitul anilor ’60 și începutul anilor ’70, Internetul nu era mult mai mult decât câteva calculatoare legate prin cabluri, cu un protocol simplu. În câțiva ani a devenit mult mai complicat.</p>
+    <div class="fig"><svg id="dNet" viewBox="0 0 760 300" role="img" aria-label="ARPANET în decembrie 1969, cu 4 noduri (UCLA, SRI, UCSB, Utah), și Internetul de azi, o rețea de rețele"></svg></div>
+    <h3 class="mini">Regulile sunt scrise în <u>RFC-uri</u></h3>
+    <p class="cap">Protocoalele Internetului sunt descrise în documente publice numite <b>Request for Comments</b>. Când nu știi exact ce face un câmp dintr-un antet, RFC-ul e sursa de adevăr.</p>
+    <div class="tbl">
+      <table class="cmds">
+        <tr><td>RFC 791</td><td>IPv4: adrese, antetul IP · <a href="https://www.rfc-editor.org/rfc/rfc791" target="_blank" rel="noopener">citește</a></td></tr>
+        <tr><td>RFC 768</td><td>UDP: tot protocolul încape în 3 pagini · <a href="https://www.rfc-editor.org/rfc/rfc768" target="_blank" rel="noopener">citește</a></td></tr>
+        <tr><td>RFC 9293</td><td>TCP (înlocuiește RFC 793) · <a href="https://www.rfc-editor.org/rfc/rfc9293" target="_blank" rel="noopener">citește</a></td></tr>
+        <tr><td>RFC 826</td><td>ARP: din adresă IP afli adresa MAC · <a href="https://www.rfc-editor.org/rfc/rfc826" target="_blank" rel="noopener">citește</a></td></tr>
+        <tr><td>RFC 1035</td><td>DNS: din nume afli adresa IP · <a href="https://www.rfc-editor.org/rfc/rfc1035" target="_blank" rel="noopener">citește</a></td></tr>
+        <tr><td>RFC 9112</td><td>HTTP/1.1, ce vom scrie de mână la tabla 8 · <a href="https://www.rfc-editor.org/rfc/rfc9112" target="_blank" rel="noopener">citește</a></td></tr>
+        <tr><td>RFC 2119</td><td>ce înseamnă exact <code>MUST</code>, <code>SHOULD</code>, <code>MAY</code> în toate celelalte · <a href="https://www.rfc-editor.org/rfc/rfc2119" target="_blank" rel="noopener">citește</a></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 06 -->
+  <section class="board" id="b6">
+    <div class="board-head"><span class="no">06</span><h2>OSI vs. <u>TCP/IP</u></h2></div>
+    <p class="cap">Ca să poată fi gândit pe bucăți, Internetul e împărțit în niveluri. Modelul <b>OSI</b> e cel mai cunoscut (7 niveluri), dar în practică se folosește <b>TCP/IP</b> (4). Apasă pe un nivel.</p>
+    <div class="fig"><svg id="dOSI" viewBox="0 0 760 360" role="img" aria-label="Modelul OSI cu 7 niveluri și modelul TCP/IP cu 4 niveluri, puse față în față"></svg></div>
+    <p class="note" id="layInfo" aria-live="polite"></p>
+  </section>
+
+  <!-- 07 -->
+  <section class="board" id="b7">
+    <div class="board-head"><span class="no">07</span><h2><u>Încapsulare</u>: fiecare nivel își pune antetul</h2></div>
+    <p class="cap">La trimitere, datele coboară prin niveluri și fiecare adaugă în față propriul antet. Receptorul face drumul invers și le scoate unul câte unul (decapsulare). Exact straturile astea le vezi în panoul din mijloc din Wireshark (tabla 10).</p>
+    <div class="ctrls">
+      <button class="btn ghost" type="button" id="encPrev" aria-label="Pasul anterior">◀ sus</button>
+      <button class="btn" type="button" id="encNext" aria-label="Pasul următor">jos ▶</button>
+      <span class="stat info" id="encStep" aria-live="polite"></span>
+    </div>
+    <div class="fig"><svg id="dEnc" viewBox="0 0 760 250" role="img" aria-label="Cadrul care se formează pe măsură ce cererea HTTP coboară prin niveluri"></svg></div>
+    <div class="lgd">
+      <span style="--c:var(--eth)"><i></i>Ethernet</span><span style="--c:var(--ip)"><i></i>IPv4</span>
+      <span style="--c:var(--tcp)"><i></i>TCP</span><span style="--c:var(--udp)"><i></i>UDP</span>
+      <span style="--c:var(--app)"><i></i>aplicație (HTTP, DNS)</span><span style="--c:var(--arp)"><i></i>ARP</span>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section class="board" id="b8">
+    <div class="board-head"><span class="no">08</span><h2>HTTP <u>de mână</u></h2></div>
+    <p class="cap">Deschide <code>http://example.com/</code> în browser. Apoi fă exact același lucru fără browser: <code>telnet</code> deschide un flux de octeți către server, iar cererea HTTP o scrii tu, linie cu linie.</p>
+    <div class="sig" aria-label="Cererea HTTP adnotată">
+      <span class="p p0">GET</span> <span class="p p1">/</span> <span class="p p2">HTTP/1.1</span><span class="crlf">\r\n</span><br>
+      <span class="p p3">Host: example.com</span><span class="crlf">\r\n</span><br>
+      <span class="p p4">Connection: close</span><span class="crlf">\r\n</span><br>
+      <span class="p p5">&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crlf">\r\n ← linie goală</span>
+    </div>
+    <div class="keys">
+      <div class="key" style="--c:var(--k0)"><code>GET</code><span>acțiunea: „dă-mi resursa”</span></div>
+      <div class="key" style="--c:var(--k1)"><code>/</code><span>calea resursei (pagina principală)</span></div>
+      <div class="key" style="--c:var(--k2)"><code>HTTP/1.1</code><span>versiunea protocolului</span></div>
+      <div class="key" style="--c:var(--k3)"><code>Host</code><span>pe ce site; pe aceeași adresă IP pot sta multe site-uri</span></div>
+      <div class="key" style="--c:var(--k4)"><code>Connection: close</code><span>„nu mai trimit alte cereri, poți închide”</span></div>
+      <div class="key" style="--c:var(--k5)"><code>linie goală</code><span>marchează sfârșitul cererii, fără ea serverul așteaptă</span></div>
+    </div>
+    <div class="ctrls"><button class="btn" type="button" id="telBtn">▶ telnet example.com 80</button><span class="cap">ieșire prescurtată, valori de exemplu</span></div>
+    <div class="term" id="telTerm" aria-live="polite" style="min-height: 330px"></div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>dacă nu ai telnet</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">sudo apt install telnet</code></pre>
+      </div>
+      <div class="code">
+        <div class="bar"><span>aceeași cerere, dintr-o singură comandă</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">printf 'GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n' \
+  | nc example.com 80</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 -->
+  <section class="board" id="b9">
+    <div class="board-head"><span class="no">09</span><h2>Un server în <u>o linie</u></h2></div>
+    <p class="cap"><code>telnet</code> e un client. Cu <code>netcat</code> pornim un server care ascultă pe portul 9090, apoi ne conectăm la el din alt terminal. Încearcă: conectează clientul, apoi scrie în oricare fereastră și apasă Enter.</p>
+    <div class="chat">
+      <div class="pane">
+        <span class="lbl">terminal 1 · server</span>
+        <div class="term" id="chatS" aria-live="polite"></div>
+        <form id="fS"><input id="inS" placeholder="scrie aici, apoi Enter" autocomplete="off" disabled aria-label="Mesaj de la server"></form>
+      </div>
+      <div class="pane">
+        <span class="lbl">terminal 2 · client</span>
+        <div class="term" id="chatC" aria-live="polite"></div>
+        <form id="fC"><input id="inC" placeholder="scrie aici, apoi Enter" autocomplete="off" disabled aria-label="Mesaj de la client"></form>
+      </div>
+    </div>
+    <div class="ctrls">
+      <button class="btn" type="button" id="connBtn">▶ telnet localhost 9090</button>
+      <button class="btn ghost" type="button" id="killBtn" disabled>Ctrl+C pe server</button>
+      <button class="btn ghost" type="button" id="resetBtn">de la capăt</button>
+    </div>
+    <p class="note"><b>Portul clientului</b> (de ex. <code>53500</code>) nu l-a ales nimeni de mână: îl dă sistemul de operare la fiecare conexiune, dintr-un interval de porturi efemere. Textul exact afișat de <code>netcat</code> diferă puțin de la o variantă la alta. Concluzia: funcționalitatea de rețea poate fi implementată de procese obișnuite, iar două procese de pe aceeași mașină pot vorbi prin rețea.</p>
+  </section>
+
+  <!-- 10 -->
+  <section class="board" id="b10">
+    <div class="board-head"><span class="no">10</span><h2>Ce trece prin <u>placa de rețea</u>: Wireshark</h2></div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>instalare (pe mașina virtuală e deja făcut)</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">sudo apt install wireshark   # la întrebare: „Yes”
+sudo addgroup wireshark      # dacă nu există deja
+sudo usermod -a -G wireshark $(whoami)
+su $(whoami)                 # shell nou, cu grupul activ</code></pre>
+      </div>
+      <div class="tbl">
+        <table class="cmds">
+          <tr><td>lo</td><td>loopback: traficul către <code>127.0.0.1</code>, adică tot ce rămâne pe mașină</td></tr>
+          <tr><td>eth0</td><td>placa de rețea pe cablu</td></tr>
+          <tr><td>wlp0s20f3</td><td>placa wireless (numele diferă de la un laptop la altul)</td></tr>
+          <tr><td>any</td><td>toate interfețele odată</td></tr>
+        </table>
+      </div>
+    </div>
+    <p class="cap">Traficul se capturează de pe o <b>interfață de rețea</b>. Dacă ești în grupul <code>wireshark</code>, nu ai nevoie de root; altfel pornești cu <code>sudo wireshark</code>. Mai jos e o captură de jucărie (cu adrese de documentare), a cererii HTTP de la tabla 8. Selectează un pachet, apoi mută cursorul peste un nivel din panoul din mijloc.</p>
+    <div class="chips" id="wsChips"><span>încearcă:</span></div>
+    <div class="ws">
+      <div class="ws-title"><span>captura-exemplu.pcap</span><span>wlp0s20f3</span></div>
+      <form class="ws-bar" id="wsForm">
+        <input id="wsFilter" placeholder="Apply a display filter … <Ctrl-/>" autocomplete="off" spellcheck="false" aria-label="Filtru de afișare">
+        <button type="submit">Aplică</button>
+        <span class="cnt" id="wsCnt"></span>
+      </form>
+      <div class="ws-list" tabindex="-1"><table><thead><tr><th>No.</th><th>Time</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Length</th><th>Info</th></tr></thead><tbody id="wsRows"></tbody></table></div>
+      <div class="ws-tree" id="wsTree"></div>
+      <div class="ws-bytes" id="wsBytes"></div>
+    </div>
+    <p class="note"><b>Panoul de sus</b>: câte un rând pe pachet. <b>Panoul din mijloc</b>: pachetul desfăcut pe niveluri, exact încapsularea de la tabla 7. <b>Panoul de jos</b>: octeții, așa cum au trecut prin placa de rețea. Fii atent: <code>192.0.2.1</code> e o adresă de documentare, nu adresa reală a lui example.com.</p>
+  </section>
+
+  <!-- 11 -->
+  <section class="board" id="b11">
+    <div class="board-head"><span class="no">11</span><h2>Același lucru, în <u>terminal</u>: tcpdump</h2></div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>tcpdump</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">ip address show                  # ce interfețe am?
+sudo tcpdump -i wlp0s20f3        # tot traficul de pe Wi-Fi
+sudo tcpdump host 8.8.8.8        # doar spre / de la 8.8.8.8
+sudo tcpdump dst port 80         # doar spre portul 80
+sudo tcpdump -w trafic.pcap      # salvează, deschizi în Wireshark
+tcpdump -r trafic.pcap           # citește o captură salvată</code></pre>
+      </div>
+      <div class="tbl">
+        <table class="cmds">
+          <tr><td>-i</td><td>interfața (<code>-i any</code> pentru toate)</td></tr>
+          <tr><td>-n</td><td>nu traduce adresele în nume (mai rapid, mai clar)</td></tr>
+          <tr><td>-v</td><td>mai multe detalii (<code>-vv</code>, <code>-vvv</code>)</td></tr>
+          <tr><td>-A</td><td>afișează conținutul pachetelor ca text</td></tr>
+          <tr><td>-X</td><td>conținutul în hex și ASCII</td></tr>
+          <tr><td>-c N</td><td>se oprește după N pachete</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="term" id="tdTerm"></div>
+    <p class="cap">Aceeași captură ca la tabla 10, filtrată doar pe server. <code>[S]</code> = SYN, <code>[S.]</code> = SYN+ACK, <code>[.]</code> = ACK, <code>[P.]</code> = date (PUSH+ACK), <code>[F.]</code> = FIN+ACK. Numerele de secvență sunt absolute la SYN, apoi relative.</p>
+    <h3 class="mini">Atenție: două <u>limbaje de filtre</u></h3>
+    <div class="tbl">
+      <table class="cmds plain">
+        <thead><tr><th>vreau doar…</th><th>Wireshark (filtru de afișare)</th><th>tcpdump (filtru de captură)</th></tr></thead>
+        <tr><td>o adresă IP</td><td><code>ip.addr == 8.8.8.8</code></td><td><code>host 8.8.8.8</code></td></tr>
+        <tr><td>o adresă, doar ca destinație</td><td><code>ip.dst == 8.8.8.8</code></td><td><code>dst host 8.8.8.8</code></td></tr>
+        <tr><td>portul 80, TCP</td><td><code>tcp.port == 80</code></td><td><code>tcp port 80</code></td></tr>
+        <tr><td>portul 80, oricare protocol</td><td><code>tcp.port == 80 || udp.port == 80</code></td><td><code>port 80</code></td></tr>
+        <tr><td>fără ARP</td><td><code>!arp</code></td><td><code>not arp</code></td></tr>
+        <tr><td>combinat</td><td><code>ip.addr == 8.8.8.8 &amp;&amp; udp</code></td><td><code>host 8.8.8.8 and udp</code></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="board" id="b12">
+    <div class="board-head"><span class="no">12</span><h2>Compilare și <u>debugging</u></h2></div>
+    <p class="cap">Rețelele înseamnă programare de nivel jos, deci o să vezi des <code>Segmentation fault</code>. Laboratoarele și temele se fac pe <b>Linux</b>, în C sau C++ (se recomandă C++ modern). Dacă vrei să-ți reîmprospătezi structurile, pointerii și alocarea de memorie, ia un crash course de C.</p>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>compilare</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-bash">gcc hello.c                      # → ./a.out
+gcc hello.c -o hello             # → ./hello
+g++ main.cpp -o main             # C++
+gcc -Wall -Wextra -g hello.c -o hello
+gcc -g -fsanitize=address,undefined hello.c -o hello</code></pre>
+      </div>
+      <div class="tbl">
+        <table class="cmds">
+          <tr><td>-o</td><td>numele executabilului</td></tr>
+          <tr><td>-g</td><td>informații de debug, pentru <code>gdb</code></td></tr>
+          <tr><td>-Wall -Wextra</td><td>avertismente: citește-le!</td></tr>
+          <tr><td>address</td><td>prinde accesele invalide la memorie (ASan)</td></tr>
+          <tr><td>undefined</td><td>prinde comportamentul nedefinit (UBSan)</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>gdb, când printf nu mai ajunge</span></div>
+        <pre><code class="language-bash">gdb ./hello
+(gdb) run argumente
+(gdb) bt            # unde a crăpat?
+(gdb) break main
+(gdb) next          # linia următoare
+(gdb) print var</code></pre>
+      </div>
+      <div class="code">
+        <div class="bar"><span>valgrind (fără -fsanitize)</span></div>
+        <pre><code class="language-bash">gcc -g hello.c -o hello
+valgrind ./hello</code></pre>
+      </div>
+    </div>
+    <p class="note"><b>Înainte să trimiți o temă</b>, rulează codul compilat cu <code>-fsanitize=address,undefined</code>. Ce nu crapă azi la tine poate crăpa mâine la checker.</p>
+  </section>
+
+  <!-- 13 -->
+  <section class="board" id="b13">
+    <div class="board-head"><span class="no">13</span><h2>File <u>descriptors</u></h2></div>
+    <p class="cap">Un <b>file descriptor</b> e un număr întreg care identifică un fișier deschis în tabela procesului. Fiecare proces are propria tabelă și pornește cu 0, 1, 2 deja ocupate. Detaliul important pentru PCom: și un <b>socket</b> e tot un file descriptor. Încearcă butoanele; apasă pe un rând ca să-l selectezi pentru <code>close</code>.</p>
+    <div class="row2">
+      <div class="fdtab" id="fdTab"></div>
+      <div style="display:grid; gap:12px">
+        <div class="fdbtns">
+          <button class="btn" type="button" id="fdOpen">open("date.txt")</button>
+          <button class="btn" type="button" id="fdSock">socket(…)</button>
+          <button class="btn ghost" type="button" id="fdClose">close(fd)</button>
+          <button class="btn ghost" type="button" id="fdReset">reset</button>
+        </div>
+        <div class="calllog" id="fdLog" aria-live="polite"></div>
+        <p class="note"><b>Regula:</b> <code>open</code> și <code>socket</code> întorc mereu <b>cel mai mic</b> număr liber. Închide <code>1</code>, apoi deschide un fișier: tot ce afișezi cu <code>printf</code> ajunge în fișier.</p>
+      </div>
+    </div>
+
+    <h3 class="mini">Copierea unui <u>fișier</u>, cu apeluri de sistem</h3>
+    <div class="code">
+      <div class="bar"><span>copy.c</span><button type="button" data-copy>Copiază</button></div>
+      <pre><code class="language-c">#include &lt;fcntl.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+#define BUFLEN 1024
+
+static void fatal(const char *msg)
+{
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc != 3) {
+        fprintf(stderr, "Utilizare: %s sursa destinatie\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    int src = open(argv[1], O_RDONLY);
+    if (src &lt; 0)
+        fatal("open sursa");
+
+    int dst = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (dst &lt; 0)
+        fatal("open destinatie");
+
+    char buf[BUFLEN];
+    ssize_t n;
+    while ((n = read(src, buf, sizeof(buf))) &gt; 0) {   /* 0 = sfârșit de fișier */
+        if (write(dst, buf, n) &lt; 0)
+            fatal("write");
+    }
+    if (n &lt; 0)
+        fatal("read");
+
+    close(src);
+    close(dst);
+    return 0;
+}</code></pre>
+    </div>
+    <p class="cap"><code>read</code> mută singur cursorul din fișier: fiecare apel continuă de unde a rămas cel dinainte. Cu <code>lseek</code> poți muta cursorul unde vrei.</p>
+    <div class="ctrls">
+      <label class="ctl" for="rSize">mărimea fișierului <output id="rSizeO">2500 B</output><input type="range" id="rSize" min="0" max="5000" step="50" value="2500"></label>
+      <div class="seg" role="group" aria-label="Mărimea bufferului">
+        <button type="button" data-buf="512" aria-pressed="false">buf 512</button>
+        <button type="button" data-buf="1024" aria-pressed="true">buf 1024</button>
+        <button type="button" data-buf="2048" aria-pressed="false">buf 2048</button>
+      </div>
+    </div>
+    <div class="chunks" id="rChunks"></div>
+    <div class="calllog" id="rLog" style="min-height:0"></div>
+    <p class="note"><b>Verifică valoarea întoarsă de fiecare apel</b> și afișează un mesaj de eroare care chiar spune ceva. <code>&gt; 0</code> înseamnă câți octeți s-au citit, <code>0</code> înseamnă sfârșit de fișier, <code>-1</code> înseamnă eroare (detaliile sunt în <code>errno</code>, le afișează <code>perror</code>).</p>
+  </section>
+
+  <!-- 14 -->
+  <section class="board" id="b14">
+    <div class="board-head"><span class="no">14</span><h2>Primul socket: <u>UDP</u></h2></div>
+    <p class="cap">Pentru exercițiul 3 pornim de la laboratorul de IPC de la SO: <code>udp_socket.c</code> e un singur fișier care, fără argumente, e <b>receptor</b>, iar cu <code>-s</code> e <b>emițător</b>. Comunică prin <code>127.0.0.1:5000</code>.</p>
+    <div class="fig"><svg id="dUdp" viewBox="0 0 760 330" role="img" aria-label="Receptorul face socket, bind și recvfrom; emițătorul face socket și sendto; datagrama Hello World trece prin interfața loopback"></svg></div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>apelurile esențiale</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-c">/* ambele părți */
+int fd = socket(AF_INET, SOCK_DGRAM, 0); /* un fd */
+struct sockaddr_in addr = {0};
+addr.sin_family = AF_INET;
+addr.sin_port = htons(5000);  /* big-endian */
+addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+/* receptor */
+bind(fd, (struct sockaddr *)&amp;addr, sizeof(addr));
+char buf[BUFSIZ];
+ssize_t n = recvfrom(fd, buf, sizeof(buf) - 1,
+                     0, NULL, NULL);
+if (n &gt;= 0)
+    buf[n] = '\0';
+printf("%s\n", buf);
+
+/* emițător */
+sendto(fd, "Hello World", 11, 0,
+       (struct sockaddr *)&amp;addr, sizeof(addr));</code></pre>
+      </div>
+      <div style="display:grid; gap:22px">
+        <div class="code">
+          <div class="bar"><span>două terminale</span><button type="button" data-copy>Copiază</button></div>
+          <pre><code class="language-bash">gcc -Wall -g udp_socket.c -o udp_socket
+./udp_socket          # terminal 1: receptor
+./udp_socket -s       # terminal 2: emițător</code></pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span>captura, pe loopback</span><button type="button" data-copy>Copiază</button></div>
+          <pre><code class="language-bash">sudo tcpdump -i lo -n -A udp port 5000
+# în Wireshark: interfața lo, filtrul udp.port == 5000</code></pre>
+        </div>
+        <div class="tbl">
+          <table class="cmds plain">
+            <thead><tr><th></th><th>UDP</th><th>TCP</th></tr></thead>
+            <tr><td>conexiune</td><td>nu</td><td>da</td></tr>
+            <tr><td>ajunge sigur</td><td>nu</td><td>da (retrimite)</td></tr>
+            <tr><td>în ordine</td><td>nu</td><td>da</td></tr>
+            <tr><td>granițe de mesaj</td><td>păstrate</td><td>flux de octeți</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section class="board" id="b15">
+    <div class="board-head"><span class="no">15</span><h2>Capcane</h2></div>
+    <div class="traps">
+      <div class="trap wide">
+        <h3><span>✗</span> <code>read</code> / <code>write</code> nu promit tot ce ai cerut</h3>
+        <p class="cap"><code>read(fd, buf, 1024)</code> poate întoarce mai puțin de 1024 chiar dacă mai sunt date. Pe socket-uri se întâmplă des. La <code>write</code> e la fel: poate scrie doar o parte.</p>
+        <div class="row2">
+          <div class="code bad"><div class="bar"><span>greșit</span></div><pre><code class="language-c">read(fd, buf, sizeof(buf));        /* o singură dată */
+write(1, buf, sizeof(buf));        /* scrie și gunoi */</code></pre></div>
+          <div class="code good"><div class="bar"><span>corect</span></div><pre><code class="language-c">ssize_t write_all(int fd, const char *buf, size_t len)
+{
+    size_t done = 0;
+    while (done &lt; len) {
+        ssize_t w = write(fd, buf + done, len - done);
+        if (w &lt; 0)
+            return -1;
+        done += w;
+    }
+    return done;
+}</code></pre></div>
+        </div>
+      </div>
+      <div class="trap"><h3><span>✗</span> filtrezi <code>127.0.0.1</code> pe Wi-Fi</h3><p class="cap">Pachetele către localhost nu ajung niciodată pe placa de rețea, ci rămân pe <code>lo</code>. Capturează pe <code>lo</code> sau <code>any</code>.</p></div>
+      <div class="trap"><h3><span>✗</span> <code>ip.addr</code> nu prinde nimic</h3><p class="cap">Poate traficul merge pe IPv6. De aceea <code>telnet -4</code> forțează IPv4; altfel încearcă <code>ipv6.addr</code>.</p></div>
+      <div class="trap"><h3><span>✗</span> serverul HTTP „nu răspunde”</h3><p class="cap">Ai uitat linia goală de la final. Sau ai scris prea încet și serverul a închis conexiunea: copiază cererea, nu o tasta.</p></div>
+      <div class="trap"><h3><span>✗</span> <code>host 8.8.8.8</code> în Wireshark</h3><p class="cap">Asta e sintaxă de tcpdump. Bara devine roșie; în Wireshark scrii <code>ip.addr == 8.8.8.8</code> (tabla 11).</p></div>
+      <div class="trap"><h3><span>✗</span> nicio interfață în Wireshark</h3><p class="cap">Nu ai drepturi de captură. Intră în grupul <code>wireshark</code> și deschide un shell nou, sau pornește cu <code>sudo</code>.</p></div>
+      <div class="trap"><h3><span>✗</span> nu verifici ce întoarce</h3><p class="cap"><code>open</code>, <code>socket</code>, <code>bind</code>, <code>sendto</code>… toate pot eșua. Fără verificare, eroarea iese la iveală trei funcții mai târziu.</p></div>
+    </div>
+  </section>
+
+  <!-- 16 -->
+  <section class="board" id="b16">
+    <div class="board-head"><span class="no">16</span><h2><u>Exerciții</u></h2></div>
+    <ol class="exs">
+      <li><b>1</b><h3>Telnet</h3>
+        <ul>
+          <li>conectați-vă la un server Telnet (protocol peste TCP, portul 23 implicit)</li>
+          <li>la prompt, scrieți <code>starwars</code> și apăsați Enter</li>
+        </ul>
+        <div class="snip">telnet -4 telehack.com</div>
+        <span class="q">Clientul doar afișează ce trimite serverul. Cu ce seamănă? (SSH)</span>
+      </li>
+      <li><b>2</b><h3>Wireshark pe exercițiul 1</h3>
+        <ul>
+          <li>găsiți un pachet care conține bucăți din textul afișat în terminal</li>
+          <li>filtrați după IP-ul serverului: îl aflați cu <code>host</code> (din <code>dnsutils</code>)</li>
+        </ul>
+        <div class="snip">host telehack.com
+ip.addr == &lt;IP-ul de mai sus&gt;</div>
+        <span class="q">De ce <code>-4</code>? Ce diferă între <code>ip.addr</code> și <code>ipv6.addr</code>?</span>
+      </li>
+      <li><b>3</b><h3>Client și server UDP</h3>
+        <ul>
+          <li>pornind de la <code>udp_socket.c</code> (tabla 14), clientul trimite <code>Hello World</code></li>
+          <li>serverul îl primește și îl afișează la <code>stdout</code></li>
+          <li>capturați și analizați datagrama în Wireshark, pe <code>lo</code> sau <code>any</code></li>
+        </ul>
+        <span class="q">Câți octeți are pachetul întreg? Din ce se adună?</span>
+      </li>
+      <li><b>4</b><h3>Un <code>cat</code> cu file descriptors</h3>
+        <ul>
+          <li>afișează la <code>stdout</code> conținutul fișierului primit ca argument</li>
+          <li>doar <code>open</code> / <code>read</code> / <code>write</code>, fără <code>fopen</code> sau <code>printf</code></li>
+          <li>trebuie să meargă și pentru fișiere mai mari decât bufferul (tabla 13)</li>
+          <li>verificați valoarea întoarsă de fiecare apel de sistem</li>
+        </ul>
+        <div class="snip">./mycat copy.c | diff - copy.c   # nicio diferență = corect</div>
+      </li>
+      <li><b>?</b><h3>V-ați blocat?</h3>
+        <ul>
+          <li><code>telnet: command not found</code>: <code>sudo apt install telnet</code></li>
+          <li><code>host: command not found</code>: <code>sudo apt install dnsutils</code></li>
+          <li>nu apar pachete: interfața greșită sau filtrul greșit (tabla 15)</li>
+          <li><code>bind: Address already in use</code>: portul e ocupat, căutați cu <code>ss -ulpn | grep 5000</code></li>
+          <li>altceva: chemați-mă</li>
+        </ul>
+      </li>
+      <li><b>⌘</b><h3>Fițuică</h3>
+        <ul>
+          <li><code>telnet HOST PORT</code>: client TCP, text</li>
+          <li><code>nc -l -p PORT</code>: server TCP (pe unele variante: <code>nc -l PORT</code>)</li>
+          <li><code>ip address show</code>: interfețe și adrese</li>
+          <li><code>host NUME</code>: ce IP are un nume</li>
+          <li><code>ss -tulpn</code>: cine ascultă pe ce port</li>
+        </ul>
+      </li>
+    </ol>
+    <footer>Sursa: <a href="https://pcom.pages.upb.ro/labs/lab1/lecture.html" target="_blank" rel="noopener">Laboratorul 1 PCom</a> · <a href="https://pcom.pages.upb.ro/labs/lab1/exercises.html" target="_blank" rel="noopener">exercițiile</a> · <a href="https://pcom.pages.upb.ro/labs/lab1/code/udp_socket.c" target="_blank" rel="noopener">udp_socket.c</a></footer>
+  </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  'use strict';
+  if (window.hljs) { try { hljs.highlightAll(); } catch (e) {} }
+
+  const INK = '#24365C', INK2 = '#4F6690', MUTE = '#9AAAC4', BLUE = '#1D5FBF', RED = '#D03A2F', GREEN = '#2E8B3E', ORANGE = '#D9822B', FILL = '#E3EDFC';
+  const LC = { frame: '#7D8591', eth: '#7B45B8', arp: '#B0417A', ip: '#1D5FBF', tcp: '#2E8B3E', udp: '#0E8C8C', app: '#D9822B', dns: '#D9822B', http: '#D9822B' };
+  const LIGHT = { eth: '#E9DFF5', ip: '#DCE8F9', tcp: '#DDF1E1', udp: '#D5EFEF', app: '#FAE6D0', '#D9822B': '#FAE6D0', '#2E8B3E': '#DDF1E1', '#1D5FBF': '#DCE8F9', '#7B45B8': '#E9DFF5' };
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  // Creion: desenează cu rough.js; dacă nu s-a încărcat, cade pe SVG simplu.
+  function pen(svg, seed) {
+    const rc = window.rough ? rough.svg(svg) : null;
+    const o = (x) => Object.assign({ roughness: 1.1, bowing: 0.8, strokeWidth: 2, stroke: INK, seed: seed || 3, hachureGap: 5, fillWeight: 1.4 }, x || {});
+    function plain(tag, a, x) {
+      x = o(x);
+      a.stroke = x.stroke; a['stroke-width'] = x.strokeWidth; a.fill = x.fill || 'none';
+      if (x.fill && x.fillStyle !== 'solid') a['fill-opacity'] = 0.28;
+      if (x.strokeLineDash) a['stroke-dasharray'] = x.strokeLineDash.join(' ');
+      return el(tag, a, svg);
+    }
+    const p = {
+      line: (x1, y1, x2, y2, x) => rc ? svg.appendChild(rc.line(x1, y1, x2, y2, o(x))) : plain('line', { x1, y1, x2, y2 }, x),
+      rect: (x0, y0, w, h, x) => rc ? svg.appendChild(rc.rectangle(x0, y0, w, h, o(x))) : plain('rect', { x: x0, y: y0, width: w, height: h }, x),
+      circle: (cx, cy, d, x) => rc ? svg.appendChild(rc.circle(cx, cy, d, o(x))) : plain('circle', { cx, cy, r: d / 2 }, x),
+      ellipse: (cx, cy, w, h, x) => rc ? svg.appendChild(rc.ellipse(cx, cy, w, h, o(x))) : plain('ellipse', { cx, cy, rx: w / 2, ry: h / 2 }, x),
+      poly: (pts, x) => rc ? svg.appendChild(rc.linearPath(pts, o(x))) : plain('polyline', { points: pts.map((q) => q.join(',')).join(' ') }, x),
+      path: (d, x) => rc ? svg.appendChild(rc.path(d, o(x))) : plain('path', { d }, x),
+      text(x, y, s, cls, anchor, fill) {
+        const t = el('text', { x, y, class: cls || 't', 'text-anchor': anchor || 'start' }, svg);
+        if (fill) t.style.fill = fill;
+        t.textContent = s; return t;
+      },
+      arrow(x1, y1, x2, y2, x) {
+        p.line(x1, y1, x2, y2, x);
+        const a = Math.atan2(y2 - y1, x2 - x1), L = 11;
+        p.line(x2, y2, x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45), x);
+        p.line(x2, y2, x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45), x);
+      },
+      clear() { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+    };
+    return p;
+  }
+
+  // ---------- 01 hero: două calculatoare și biți pe cablu ----------
+  (function () {
+    const p = pen($('dHero'), 11);
+    function laptop(x, label) {
+      p.rect(x, 20, 120, 78, { strokeWidth: 2.4 });
+      p.rect(x + 10, 30, 100, 58, { fill: FILL, fillStyle: 'solid', strokeWidth: 1.2 });
+      p.poly([[x - 14, 112], [x + 134, 112], [x + 120, 98], [x, 98], [x - 14, 112]], { strokeWidth: 2.2 });
+      p.text(x + 60, 68, label, 'h', 'middle');
+    }
+    laptop(16, 'A'); laptop(624, 'B');
+    const bits = [1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1], x0 = 150, x1 = 620, w = (x1 - x0) / bits.length, yH = 52, yL = 92;
+    const pts = [[136, yL], [x0, yL]];
+    bits.forEach((b, i) => { const y = b ? yH : yL; pts.push([x0 + i * w, y], [x0 + (i + 1) * w, y]); });
+    pts.push([x1, yL], [624, yL]);
+    p.poly(pts, { stroke: BLUE, strokeWidth: 2.6, roughness: 0.6 });
+    bits.forEach((b, i) => p.text(x0 + i * w + w / 2, 40, String(b), 'm', 'middle', b ? BLUE : INK2));
+    p.text((x0 + x1) / 2, 136, 'un protocol = reguli pe care A și B le respectă amândoi', 'ts', 'middle');
+  })();
+
+  // ---------- 02 protocol: telefon vs web ----------
+  (function () {
+    const p = pen($('dProto'), 5);
+    function seq(x0, A, B, msgs, title, sub) {
+      const xa = x0 + 40, xb = x0 + 310;
+      p.text(x0, 30, title, 'h'); p.text(x0, 52, sub, 'ts');
+      p.text(xa, 86, A, 'hs', 'middle'); p.text(xb, 86, B, 'hs', 'middle');
+      p.line(xa, 96, xa, 352, { stroke: MUTE, strokeLineDash: [5, 6], strokeWidth: 1.6 });
+      p.line(xb, 96, xb, 352, { stroke: MUTE, strokeLineDash: [5, 6], strokeWidth: 1.6 });
+      msgs.forEach((m, i) => {
+        const y = 124 + i * 38, right = m[0] === '>', s = m.slice(1), c = right ? BLUE : ORANGE;
+        if (right) p.arrow(xa + 4, y, xb - 4, y + 14, { stroke: c, strokeWidth: 1.8 });
+        else p.arrow(xb - 4, y, xa + 4, y + 14, { stroke: c, strokeWidth: 1.8 });
+        p.text((xa + xb) / 2, y - 4, s, 't', 'middle');
+      });
+    }
+    seq(10, 'Ana', 'Bogdan', ['>Alo?', '<Alo, sunt Bogdan.', '>Ai timp mâine la 10?', '<Da.', '>Bine, pa!', '<Pa!'], 'la telefon', 'și oamenii au un protocol, doar că nescris');
+    p.line(385, 20, 385, 355, { stroke: MUTE, strokeLineDash: [4, 6], strokeWidth: 1.2 });
+    seq(400, 'browser', 'server', ['>deschide conexiunea', '<ok', '>GET / HTTP/1.1', '<HTTP/1.1 200 OK + pagina', '>închide', '<închide'], 'pe web', 'HTTP, peste o conexiune TCP');
+  })();
+
+  // ---------- 03 medii de transmisie ----------
+  (function () {
+    const p = pen($('dMedia'), 6);
+    const items = [
+      ['cablu electric', 'tensiune'],
+      ['fibră optică', 'lumină'],
+      ['wireless', 'unde radio'],
+      ['semnale de fum', 'fum']
+    ];
+    items.forEach((it, i) => {
+      const x = 10 + i * 190, cx = x + 90;
+      if (i === 0) {
+        p.path(`M ${x + 14} 140 C ${x + 60} 60, ${x + 110} 190, ${x + 150} 110`, { strokeWidth: 6 });
+        p.rect(x + 146, 94, 30, 30, { fill: FILL, fillStyle: 'solid', strokeWidth: 2 });
+        p.line(x + 176, 102, x + 186, 102, { strokeWidth: 2 }); p.line(x + 176, 116, x + 186, 116, { strokeWidth: 2 });
+      } else if (i === 1) {
+        p.line(x + 10, 96, x + 172, 96, { strokeWidth: 2.2 }); p.line(x + 10, 134, x + 172, 134, { strokeWidth: 2.2 });
+        const pts = []; for (let k = 0; k <= 8; k++) pts.push([x + 10 + k * 20, k % 2 ? 100 : 130]);
+        p.poly(pts, { stroke: ORANGE, strokeWidth: 2.2, roughness: 0.6 });
+      } else if (i === 2) {
+        p.line(cx - 30, 170, cx - 30, 92, { strokeWidth: 2.6 });
+        p.poly([[cx - 46, 170], [cx - 14, 170]], { strokeWidth: 2.6 });
+        p.circle(cx - 30, 90, 10, { fill: INK, fillStyle: 'solid' });
+        [22, 42, 62].forEach((r) => {
+          const a = 0.7, sx = cx - 30 + r * Math.cos(-a), sy = 90 + r * Math.sin(-a), ex = cx - 30 + r * Math.cos(a), ey = 90 + r * Math.sin(a);
+          p.path(`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`, { stroke: BLUE, strokeWidth: 2 });
+        });
+      } else {
+        p.path(`M ${cx - 22} 172 Q ${cx - 18} 140 ${cx} 132 Q ${cx + 4} 150 ${cx + 14} 140 Q ${cx + 24} 160 ${cx + 22} 172 Z`, { stroke: ORANGE, fill: '#F6C58E', strokeWidth: 2 });
+        p.ellipse(cx - 4, 112, 46, 26, { fill: '#C9CED6', stroke: INK2, strokeWidth: 1.6 });
+        p.ellipse(cx + 14, 82, 56, 30, { fill: '#C9CED6', stroke: INK2, strokeWidth: 1.6 });
+        p.ellipse(cx - 6, 50, 66, 32, { fill: '#C9CED6', stroke: INK2, strokeWidth: 1.6 });
+      }
+      p.text(cx, 210, it[0], 'hs', 'middle');
+      p.text(cx, 234, 'bitul = ' + it[1], 'ts', 'middle');
+    });
+  })();
+
+  // ---------- 04 biți pe fir ----------
+  const svgW = $('dWire'), wTxt = $('wTxt'), wT = $('wT'), wSync = $('wSync'), wDrift = $('wDrift');
+  let drift = false;
+  function wire() {
+    const s = (wTxt.value.replace(/[^\x20-\x7E]/g, '') || '?').slice(0, 4);
+    const T = +wT.value;
+    $('wTo').textContent = T + ' ms';
+    const bits = [];
+    for (const ch of s) { const c = ch.charCodeAt(0); for (let k = 7; k >= 0; k--) bits.push((c >> k) & 1); }
+    const n = bits.length, x0 = 70, W = 670, cw = W / n, yH = 72, yL = 136;
+    const p = pen(svgW, 7); p.clear();
+    p.text(x0 - 12, yH + 5, '5 V', 'ms', 'end'); p.text(x0 - 12, yL + 5, '0 V', 'ms', 'end');
+    for (let b = 0; b < n / 8; b++) {
+      p.text(x0 + (b * 8 + 4) * cw, 20, `'${s[b]}' = ${s.charCodeAt(b)}`, 'ms', 'middle');
+      if (b) p.line(x0 + b * 8 * cw, 28, x0 + b * 8 * cw, 150, { stroke: MUTE, strokeLineDash: [3, 5], strokeWidth: 1, roughness: 0.4 });
+    }
+    bits.forEach((b, i) => p.text(x0 + (i + 0.5) * cw, 50, String(b), 'm', 'middle', b ? BLUE : INK2));
+    const pts = [];
+    bits.forEach((b, i) => { const y = b ? yH : yL; pts.push([x0 + i * cw, y], [x0 + (i + 1) * cw, y]); });
+    p.poly(pts, { stroke: BLUE, strokeWidth: 2.4, roughness: 0.5 });
+    p.arrow(x0, 166, x0 + W + 14, 166, { strokeWidth: 1.2, roughness: 0.5 });
+    p.text(x0, 184, '0', 'ms', 'middle'); p.text(x0 + W, 184, (n * T) + ' ms', 'ms', 'middle');
+    // receptorul: un eșantion la fiecare perioadă a propriului ceas
+    const f = drift ? 1.12 : 1, got = [];
+    let wrong = 0;
+    for (let k = 0; ; k++) {
+      const t = (k + 0.5) * f;
+      if (t >= n) break;
+      const b = bits[Math.floor(t)], x = x0 + t * cw, ok = b === bits[k];
+      got.push(b);
+      if (!ok) wrong++;
+      el('line', { x1: x, y1: yH - 8, x2: x, y2: 200, stroke: ok ? '#A9D8B1' : '#F0B3AE', 'stroke-width': 1, 'stroke-dasharray': '2 3' }, svgW);
+      el('circle', { cx: x, cy: b ? yH : yL, r: 4.5, fill: ok ? GREEN : RED }, svgW);
+      p.text(x, 222, String(b), 'm', 'middle', ok ? GREEN : RED);
+    }
+    p.text(x0 - 12, 226, 'citit', 'ts', 'end');
+    const missing = n - got.length;
+    let dec = '';
+    for (let i = 0; i + 8 <= got.length; i += 8) {
+      const c = parseInt(got.slice(i, i + 8).join(''), 2);
+      dec += c >= 32 && c < 127 ? String.fromCharCode(c) : '·';
+    }
+    const rate = 1000 / T;
+    $('wRate').textContent = `${Number.isInteger(rate) ? rate : rate.toFixed(1)} b/s · ${n} biți în ${n * T} ms`;
+    const v = $('wVerd');
+    if (!wrong && !missing) { v.className = 'stat ok'; v.textContent = `receptorul a citit exact „${s}”`; }
+    else { v.className = 'stat ko'; v.textContent = `a citit „${dec}”: ${wrong} biți greșiți, ${missing} pierduți`; }
+  }
+  function setDrift(d) { drift = d; wSync.setAttribute('aria-pressed', String(!d)); wDrift.setAttribute('aria-pressed', String(d)); wire(); }
+  wTxt.addEventListener('input', wire); wT.addEventListener('input', wire);
+  wSync.addEventListener('click', () => setDrift(false)); wDrift.addEventListener('click', () => setDrift(true));
+  wire();
+
+  // ---------- 05 ARPANET și azi ----------
+  (function () {
+    const p = pen($('dNet'), 4);
+    p.text(20, 30, 'ARPANET, decembrie 1969', 'h');
+    const N = { SRI: [110, 100], UCSB: [130, 190], UCLA: [220, 240], Utah: [330, 90] };
+    [['UCLA', 'SRI'], ['UCLA', 'UCSB'], ['SRI', 'UCSB'], ['SRI', 'Utah']].forEach((e) => p.line(N[e[0]][0], N[e[0]][1], N[e[1]][0], N[e[1]][1], { strokeWidth: 2.2 }));
+    Object.keys(N).forEach((k) => {
+      p.circle(N[k][0], N[k][1], 26, { fill: FILL, fillStyle: 'solid', strokeWidth: 2.2 });
+      p.text(N[k][0] + (k === 'Utah' ? 0 : k === 'UCLA' ? 22 : -22), N[k][1] + (k === 'Utah' ? -22 : 6), k, 'hs', k === 'Utah' ? 'middle' : k === 'UCLA' ? 'start' : 'end');
+    });
+    p.text(20, 286, 'primul mesaj, UCLA → SRI, oct. 1969: „LO” (trebuia „LOGIN”)', 'ts');
+    p.line(400, 20, 400, 290, { stroke: MUTE, strokeLineDash: [4, 6], strokeWidth: 1.2 });
+    p.text(420, 30, 'azi: o rețea de rețele', 'h');
+    // noduri pseudo-aleatoare, deterministe
+    let sd = 7; const rnd = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
+    const pts = [];
+    for (let i = 0; i < 34; i++) pts.push([430 + rnd() * 310, 60 + rnd() * 220]);
+    pts.forEach((a, i) => {
+      const near = pts.map((b, j) => [j, Math.hypot(a[0] - b[0], a[1] - b[1])]).filter((q) => q[0] > i).sort((u, v) => u[1] - v[1]).slice(0, 2);
+      near.forEach((q) => { if (q[1] < 90) p.line(a[0], a[1], pts[q[0]][0], pts[q[0]][1], { stroke: MUTE, strokeWidth: 1.2, roughness: 0.6 }); });
+    });
+    pts.forEach((a, i) => p.circle(a[0], a[1], i % 7 ? 9 : 15, { fill: i % 7 ? '#fff' : BLUE, fillStyle: 'solid', stroke: i % 7 ? INK2 : BLUE, strokeWidth: 1.4, roughness: 0.6 }));
+  })();
+
+  // ---------- 06 OSI vs TCP/IP ----------
+  const OSI = ['Aplicație', 'Prezentare', 'Sesiune', 'Transport', 'Rețea', 'Legătură de date', 'Fizic'];
+  const TCPIP = [
+    { n: 'Aplicație', osi: [0, 1, 2], c: ORANGE, u: 'mesaj', pr: ['HTTP · DNS · SMTP', 'Telnet · SSH'], d: 'ce vede programul: o cerere, un răspuns, o pagină' },
+    { n: 'Transport', osi: [3], c: GREEN, u: 'segment (TCP) / datagramă (UDP)', pr: ['TCP · UDP'], d: 'porturile: care proces de pe mașină primește datele' },
+    { n: 'Internet', osi: [4], c: BLUE, u: 'pachet', pr: ['IPv4 · IPv6 · ICMP'], d: 'adrese IP și rutare: cum ajunge pachetul dintr-o rețea în alta' },
+    { n: 'Acces la rețea', osi: [5, 6], c: '#7B45B8', u: 'cadru (frame), apoi biți', pr: ['Ethernet · Wi-Fi', 'ARP'], d: 'adrese MAC, un singur „hop”; plus semnalul fizic de pe mediu (tabla 4)' }
+  ];
+  const svgO = $('dOSI'); let selL = 1;
+  function osi() {
+    const p = pen(svgO, 13); p.clear();
+    const top = 40, h = 44, gx = 70, gw = 220, tx = 340, tw = 210, ex = 572;
+    p.text(gx + gw / 2, 26, 'OSI', 'hs', 'middle'); p.text(tx + tw / 2, 26, 'TCP/IP', 'hs', 'middle');
+    const mapL = (i) => TCPIP.findIndex((L) => L.osi.includes(i));
+    OSI.forEach((n, i) => {
+      const y = top + i * h, L = TCPIP[mapL(i)], on = mapL(i) === selL;
+      p.rect(gx, y + 3, gw, h - 6, on ? { fill: LIGHT[L.c], fillStyle: 'solid', stroke: L.c, strokeWidth: 2.2 } : { stroke: INK2, strokeWidth: 1.6 });
+      p.text(gx + 14, y + h / 2 + 5, String(7 - i), 'ms', 'start');
+      p.text(gx + gw / 2 + 8, y + h / 2 + 6, n, 't', 'middle');
+    });
+    TCPIP.forEach((L, k) => {
+      const y = top + L.osi[0] * h, H = L.osi.length * h, on = k === selL;
+      p.rect(tx, y + 3, tw, H - 6, on ? { fill: LIGHT[L.c], fillStyle: 'solid', stroke: L.c, strokeWidth: 2.6 } : { stroke: L.c, strokeWidth: 2 });
+      p.text(tx + tw / 2, y + H / 2 + 7, L.n, 'hs', 'middle', on ? INK : L.c);
+      p.line(gx + gw + 4, y + H / 2, tx - 4, y + H / 2, { stroke: MUTE, strokeLineDash: [3, 4], strokeWidth: 1.2 });
+      L.pr.forEach((s, j) => p.text(ex, y + H / 2 + 5 + (j - (L.pr.length - 1) / 2) * 18, s, 'm', 'start', on ? INK : INK2));
+    });
+    // de jos în sus
+    p.arrow(36, top + 7 * h - 6, 36, top + 6, { stroke: RED, strokeWidth: 2 });
+    const t = p.text(24, top + 3.5 * h, 'PCom: de jos în sus', 'hs', 'middle', RED);
+    t.setAttribute('transform', `rotate(-90 24 ${top + 3.5 * h})`);
+    // zone de click
+    function hit(x, y, w, hh, k, label) {
+      const r = el('rect', { x, y, width: w, height: hh, fill: 'transparent', class: 'hit', tabindex: 0, role: 'button', 'aria-label': label }, svgO);
+      r.addEventListener('click', () => { selL = k; osi(); });
+      r.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selL = k; osi(); svgO.querySelector(`[data-k="${k}"]`)?.focus(); } });
+      r.setAttribute('data-k', k);
+    }
+    OSI.forEach((n, i) => { const r = el('rect', { x: gx, y: top + i * h, width: gw, height: h, fill: 'transparent', class: 'hit' }, svgO); r.addEventListener('click', () => { selL = mapL(i); osi(); }); });
+    TCPIP.forEach((L, k) => hit(tx, top + L.osi[0] * h, tw, L.osi.length * h, k, 'Nivelul ' + L.n));
+    const L = TCPIP[selL];
+    $('layInfo').innerHTML = `<b>${L.n}</b> · unitatea de date: <b>${L.u}</b> · ${L.d}. Corespunde nivelurilor OSI ${L.osi.map((i) => 7 - i).join(', ')}.`;
+  }
+  osi();
+
+  // ---------- date comune: captura de jucărie (tablele 7, 10, 11) ----------
+  const u16 = (n) => [(n >> 8) & 255, n & 255];
+  const u32 = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const strB = (s) => Array.from(s, (c) => c.charCodeAt(0) & 255);
+  const macB = (m) => m.split(':').map((h) => parseInt(h, 16));
+  const ipB = (a) => a.split('.').map(Number);
+  const hex = (n, w) => n.toString(16).padStart(w || 2, '0');
+  function csum(arr) {
+    let s = 0;
+    for (let i = 0; i < arr.length; i += 2) s += (arr[i] << 8) + (arr[i + 1] || 0);
+    while (s >> 16) s = (s & 0xffff) + (s >> 16);
+    return (~s) & 0xffff;
+  }
+  const FL = { FIN: 1, SYN: 2, RST: 4, PSH: 8, ACK: 16 };
+  const flagsByte = (f) => f.reduce((a, k) => a | FL[k], 0);
+
+  const CM = '3c:22:fb:1a:2b:3c', GM = 'a0:63:91:4d:5e:6f', BC = 'ff:ff:ff:ff:ff:ff', ZM = '00:00:00:00:00:00';
+  const CIP = '192.168.1.10', GIP = '192.168.1.1', SIP = '192.0.2.1';
+  const ISN_C = 0x1f2e3d4c, ISN_S = 0x6a5b4c3d, CP = 51234, DP = 40512;
+  const REQ = 'GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n';
+  const RH = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 1256\r\nConnection: close\r\n\r\n';
+  let body = '<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title>\n';
+  body += ' '.repeat(1256 - body.length);
+  const RESP = RH + body, RL = RESP.length;
+  const OPT = [2, 4, 5, 180, 1, 1, 4, 2, 1, 3, 3, 7];   // mss 1460, nop, nop, sackOK, nop, wscale 7
+  const QN = [7, ...strB('example'), 3, ...strB('com'), 0];
+  const DNSQ = [0x1a, 0x2b, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, ...QN, 0, 1, 0, 1];
+  const DNSR = [0x1a, 0x2b, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0, ...QN, 0, 1, 0, 1, 0xc0, 0x0c, 0, 1, 0, 1, ...u32(3600), 0, 4, ...ipB(SIP)];
+
+  let idc = 0x5a10;
+  function mk(t, c, flags, seq, ack, win, opts, txt) {
+    return {
+      t, eth: c ? { src: CM, dst: GM } : { src: GM, dst: CM },
+      ip: c ? { src: CIP, dst: SIP, id: idc++ } : { src: SIP, dst: CIP, id: 0 },
+      tcp: { sp: c ? CP : 80, dp: c ? 80 : CP, flags, seq, ack, win, isn: c ? ISN_C : ISN_S, peer: c ? ISN_S : ISN_C, opts: opts || [] },
+      app: txt ? { k: 'http', bytes: strB(txt), txt } : null
+    };
+  }
+  const PK = [
+    { t: 0, eth: { src: CM, dst: BC }, arp: { op: 1, sha: CM, spa: CIP, tha: ZM, tpa: GIP } },
+    { t: 0.0012, eth: { src: GM, dst: CM }, arp: { op: 2, sha: GM, spa: GIP, tha: CM, tpa: CIP } },
+    { t: 0.0020, eth: { src: CM, dst: GM }, ip: { src: CIP, dst: GIP, id: 0x3e01 }, udp: { sp: DP, dp: 53 }, app: { k: 'dns', bytes: DNSQ }, dns: 'q' },
+    { t: 0.0185, eth: { src: GM, dst: CM }, ip: { src: GIP, dst: CIP, id: 0x0000 }, udp: { sp: 53, dp: DP }, app: { k: 'dns', bytes: DNSR }, dns: 'r' },
+    mk(0.0201, true, ['SYN'], 0, null, 64240, OPT),
+    mk(0.0390, false, ['SYN', 'ACK'], 0, 1, 65535, OPT),
+    mk(0.0391, true, ['ACK'], 1, 1, 502),
+    mk(0.0395, true, ['PSH', 'ACK'], 1, 1, 502, null, REQ),
+    mk(0.0580, false, ['ACK'], 1, 57, 509),
+    mk(0.0601, false, ['PSH', 'ACK'], 1, 57, 509, null, RESP),
+    mk(0.0602, false, ['FIN', 'ACK'], 1 + RL, 57, 509),
+    mk(0.0605, true, ['ACK'], 57, RL + 2, 501),
+    mk(0.0611, true, ['FIN', 'ACK'], 57, RL + 2, 501),
+    mk(0.0790, false, ['ACK'], RL + 2, 58, 509)
+  ];
+
+  function build(p) {
+    const segs = [{ k: 'eth', b: [...macB(p.eth.dst), ...macB(p.eth.src), ...u16(p.arp ? 0x0806 : 0x0800)] }];
+    if (p.arp) {
+      const a = p.arp;
+      segs.push({ k: 'arp', b: [...u16(1), ...u16(0x0800), 6, 4, ...u16(a.op), ...macB(a.sha), ...ipB(a.spa), ...macB(a.tha), ...ipB(a.tpa)] });
+      return segs;
+    }
+    const app = p.app ? p.app.bytes : [];
+    let l4;
+    if (p.tcp) {
+      const t = p.tcp, hl = 20 + t.opts.length;
+      l4 = [...u16(t.sp), ...u16(t.dp), ...u32((t.seq + t.isn) >>> 0), ...u32(t.ack == null ? 0 : (t.ack + t.peer) >>> 0),
+        (hl / 4) << 4, flagsByte(t.flags), ...u16(t.win), 0, 0, 0, 0, ...t.opts];
+    } else {
+      l4 = [...u16(p.udp.sp), ...u16(p.udp.dp), ...u16(8 + app.length), 0, 0];
+    }
+    const proto = p.tcp ? 6 : 17, total = 20 + l4.length + app.length;
+    const ip = [0x45, 0, ...u16(total), ...u16(p.ip.id), 0x40, 0, 64, proto, 0, 0, ...ipB(p.ip.src), ...ipB(p.ip.dst)];
+    const ic = csum(ip); ip[10] = ic >> 8; ip[11] = ic & 255;
+    const pseudo = [...ipB(p.ip.src), ...ipB(p.ip.dst), 0, proto, ...u16(l4.length + app.length)];
+    const c = csum([...pseudo, ...l4, ...app]), ci = p.tcp ? 16 : 6;
+    l4[ci] = c >> 8; l4[ci + 1] = c & 255;
+    segs.push({ k: 'ip', b: ip }, { k: p.tcp ? 'tcp' : 'udp', b: l4 });
+    if (app.length) segs.push({ k: p.app.k, b: app });
+    return segs;
+  }
+  PK.forEach((p, i) => {
+    p.no = i + 1;
+    p.segs = build(p);
+    p.len = p.segs.reduce((a, s) => a + s.b.length, 0);
+    p.plen = p.app ? p.app.bytes.length : 0;
+    if (p.arp) {
+      p.src = p.eth.src; p.dst = p.eth.dst === BC ? 'Broadcast' : p.eth.dst; p.proto = 'ARP'; p.row = 'r-arp';
+      p.info = p.arp.op === 1 ? `Who has ${p.arp.tpa}? Tell ${p.arp.spa}` : `${p.arp.spa} is at ${p.arp.sha}`;
+      return;
+    }
+    p.src = p.ip.src; p.dst = p.ip.dst;
+    if (p.dns) {
+      p.proto = 'DNS'; p.row = 'r-dns';
+      p.info = p.dns === 'q' ? 'Standard query 0x1a2b A example.com' : 'Standard query response 0x1a2b A example.com A ' + SIP;
+      return;
+    }
+    const t = p.tcp;
+    if (p.app) { p.proto = 'HTTP'; p.row = 'r-http'; p.info = p.app.txt.split('\r\n')[0] + (t.sp === 80 ? '  (text/html)' : ''); return; }
+    p.proto = 'TCP';
+    p.row = t.flags.includes('SYN') || t.flags.includes('FIN') ? 'r-synfin' : 'r-tcp';
+    p.info = `${t.sp} → ${t.dp} [${t.flags.join(', ')}] Seq=${t.seq}` + (t.ack != null ? ` Ack=${t.ack}` : '') + ` Win=${t.win} Len=0` + (t.flags.includes('SYN') ? ' MSS=1460 SACK_PERM WS=128' : '');
+  });
+
+  // ---------- 07 încapsulare ----------
+  const REQP = PK[7];
+  const ENC = [
+    { k: 'app', name: 'HTTP', b: REQP.plen, f: 'GET / HTTP/1.1 …' },
+    { k: 'tcp', name: 'TCP', b: 20, f: `${CP} → 80` },
+    { k: 'ip', name: 'IPv4', b: 20, f: 'adrese IP' },
+    { k: 'eth', name: 'Ethernet', b: 14, f: 'adrese MAC' }
+  ];
+  const STEPS = [
+    'aplicația scrie cererea HTTP',
+    'transportul pune antetul TCP: porturile',
+    'internetul pune antetul IP: adresele IP',
+    'legătura pune antetul Ethernet (adrese MAC) și FCS-ul la coadă',
+    'nivelul fizic trimite totul ca biți pe fir'
+  ];
+  let encS = 0;
+  const svgE = $('dEnc');
+  function enc() {
+    const p = pen(svgE, 17); p.clear();
+    const bw = (b) => b.name === 'FCS' ? 30 : b.k === 'app' ? b.b * 5 : 140, blocks = [];
+    if (encS >= 3) blocks.push({ ...ENC[3] });
+    if (encS >= 2) blocks.push({ ...ENC[2] });
+    if (encS >= 1) blocks.push({ ...ENC[1] });
+    blocks.push({ ...ENC[0] });
+    if (encS >= 3) blocks.push({ k: 'eth', name: 'FCS', b: 4, f: '' });
+    const total = blocks.reduce((a, b) => a + b.b, 0), W = blocks.reduce((a, b) => a + bw(b), 0);
+    let x = (760 - W) / 2;
+    const y = 70, H = 76;
+    const newK = [null, 'tcp', 'ip', 'eth', null][encS];
+    blocks.forEach((b) => {
+      const w = bw(b), c = LC[b.k], fresh = b.k === newK;
+      p.rect(x, y, w, H, { fill: LIGHT[b.k], fillStyle: 'solid', stroke: c, strokeWidth: fresh ? 3 : 2 });
+      if (w >= 70) {
+        p.text(x + w / 2, y + 26, b.name, 'hs', 'middle');
+        p.text(x + w / 2, y + 46, b.b + ' B', 'ms', 'middle');
+        p.text(x + w / 2, y + 66, b.f, 'ms', 'middle');
+      } else {
+        p.text(x + w / 2, y - 22, b.name, 'ms', 'middle');
+        p.text(x + w / 2, y - 8, b.b + ' B', 'ms', 'middle');
+      }
+      if (fresh) p.text(x + w / 2, y + H + 26, 'nou ↑', 'hs', 'middle', RED);
+      x += w;
+    });
+    p.text(380, 26, STEPS[encS], 'hs', 'middle', INK);
+    if (encS === 4) {
+      const x0 = (760 - W) / 2, pts = [];
+      let sd = 3; const n = 60, cw = W / n;
+      for (let i = 0; i < n; i++) { sd = (sd * 1103515245 + 12345) & 0x7fffffff; const yb = (sd >> 16) & 1 ? 182 : 206; pts.push([x0 + i * cw, yb], [x0 + (i + 1) * cw, yb]); }
+      p.poly(pts, { stroke: BLUE, strokeWidth: 2, roughness: 0.4 });
+      p.text(380, 238, `${total} octeți = ${total * 8} biți pe fir (lățimile nu sunt la scară)`, 't', 'middle', BLUE);
+    } else if (encS === 3) {
+      p.text(380, 226, `cadru: ${blocks.map((b) => b.b).join(' + ')} = ${total} octeți`, 't', 'middle');
+    } else {
+      p.text(380, 226, `${total} octeți până acum`, 't', 'middle', INK2);
+    }
+    $('encStep').textContent = `pasul ${encS + 1} din 5`;
+    $('encPrev').disabled = encS === 0; $('encNext').disabled = encS === 4;
+  }
+  $('encPrev').addEventListener('click', () => { if (encS > 0) { encS--; enc(); } });
+  $('encNext').addEventListener('click', () => { if (encS < 4) { encS++; enc(); } });
+  enc();
+
+  // ---------- 08 telnet, rejucat ----------
+  const telTerm = $('telTerm');
+  const TEL = [
+    ['pr', '$ telnet example.com 80'],
+    ['rx', `Trying ${SIP}...`],
+    ['rx', 'Connected to example.com.'],
+    ['rx', "Escape character is '^]'."],
+    ['me', 'GET / HTTP/1.1', 1], ['me', 'Host: example.com', 1], ['me', 'Connection: close', 1], ['me', '', 1],
+    ['ok', 'HTTP/1.1 200 OK'], ['rx', 'Content-Type: text/html'], ['rx', 'Content-Length: 1256'], ['rx', 'Connection: close'], ['rx', ''],
+    ['rx', '<!doctype html>'], ['rx', '<html>'], ['rx', '<head>'], ['rx', '    <title>Example Domain</title>'],
+    ['an', '    … (prescurtat)'], ['rx', '</html>'], ['pr', 'Connection closed by foreign host.']
+  ];
+  let telRun = 0;
+  function telnet(animate) {
+    const my = ++telRun;
+    telTerm.innerHTML = '';
+    if (!animate) { TEL.forEach((l) => { const d = document.createElement('div'); d.className = l[0]; d.textContent = l[1]; telTerm.appendChild(d); }); return; }
+    let i = 0;
+    function nextLine() {
+      if (my !== telRun || i >= TEL.length) return;
+      const l = TEL[i++], d = document.createElement('div');
+      d.className = l[0];
+      telTerm.appendChild(d);
+      if (l[2]) {
+        let k = 0; d.classList.add('cur');
+        (function type() {
+          if (my !== telRun) return;
+          if (k <= l[1].length) { d.textContent = l[1].slice(0, k++); setTimeout(type, 45); }
+          else { d.classList.remove('cur'); setTimeout(nextLine, 250); }
+        })();
+      } else {
+        d.textContent = l[1];
+        setTimeout(nextLine, l[0] === 'pr' && i === 1 ? 500 : 90);
+      }
+    }
+    nextLine();
+  }
+  $('telBtn').addEventListener('click', () => telnet(true));
+  telnet(false);
+
+  // ---------- 09 netcat ----------
+  const chatS = $('chatS'), chatC = $('chatC'), inS = $('inS'), inC = $('inC');
+  function say(term, cls, txt) { const d = document.createElement('div'); d.className = cls; d.textContent = txt; term.appendChild(d); term.scrollTop = term.scrollHeight; }
+  function chatReset() {
+    chatS.innerHTML = ''; chatC.innerHTML = '';
+    say(chatS, 'pr', '$ netcat -n -v -l -p 9090');
+    say(chatS, 'rx', 'Listening on 0.0.0.0 9090');
+    say(chatC, 'pr', '$');
+    inS.disabled = inC.disabled = true; inS.value = inC.value = '';
+    $('connBtn').disabled = false; $('killBtn').disabled = true;
+  }
+  $('connBtn').addEventListener('click', () => {
+    const port = 32768 + Math.floor(Math.random() * 28232);
+    chatC.innerHTML = '';
+    say(chatC, 'pr', '$ telnet localhost 9090');
+    say(chatC, 'rx', 'Trying 127.0.0.1...');
+    say(chatC, 'rx', 'Connected to localhost.');
+    say(chatC, 'rx', "Escape character is '^]'.");
+    say(chatS, 'ok', `Connection from localhost ${port} received!`);
+    inS.disabled = inC.disabled = false; inC.focus();
+    $('connBtn').disabled = true; $('killBtn').disabled = false;
+  });
+  $('killBtn').addEventListener('click', () => {
+    say(chatS, 'pr', '^C'); say(chatS, 'pr', '$');
+    say(chatC, 'er', 'Connection closed by foreign host.'); say(chatC, 'pr', '$');
+    inS.disabled = inC.disabled = true; $('killBtn').disabled = true;
+  });
+  $('resetBtn').addEventListener('click', chatReset);
+  function hook(form, input, own, other) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.disabled) return;
+      say(own, 'me', input.value); say(other, 'rx', input.value); input.value = '';
+    });
+  }
+  hook($('fS'), inS, chatS, chatC); hook($('fC'), inC, chatC, chatS);
+  chatReset();
+
+  // ---------- 10 Wireshark de jucărie ----------
+  // filtrele de afișare: un mic parser pentru câmpurile folosite în laborator
+  const has = (p, k) => p.segs.some((s) => s.k === k);
+  const FIELDS = {
+    eth: (p) => [1], frame: (p) => [1],
+    arp: (p) => p.arp ? [1] : null, ip: (p) => p.ip ? [1] : null, tcp: (p) => p.tcp ? [1] : null, udp: (p) => p.udp ? [1] : null,
+    dns: (p) => p.dns ? [1] : null, http: (p) => has(p, 'http') ? [1] : null,
+    ipv6: () => null, 'ipv6.addr': () => null, icmp: () => null,
+    'frame.len': (p) => [p.len], 'frame.number': (p) => [p.no],
+    'eth.addr': (p) => [p.eth.src, p.eth.dst], 'eth.src': (p) => [p.eth.src], 'eth.dst': (p) => [p.eth.dst],
+    'ip.addr': (p) => p.ip ? [p.ip.src, p.ip.dst] : null, 'ip.src': (p) => p.ip ? [p.ip.src] : null, 'ip.dst': (p) => p.ip ? [p.ip.dst] : null,
+    'ip.ttl': (p) => p.ip ? [64] : null,
+    'tcp.port': (p) => p.tcp ? [p.tcp.sp, p.tcp.dp] : null, 'tcp.srcport': (p) => p.tcp ? [p.tcp.sp] : null, 'tcp.dstport': (p) => p.tcp ? [p.tcp.dp] : null,
+    'udp.port': (p) => p.udp ? [p.udp.sp, p.udp.dp] : null, 'udp.srcport': (p) => p.udp ? [p.udp.sp] : null, 'udp.dstport': (p) => p.udp ? [p.udp.dp] : null,
+    'tcp.len': (p) => p.tcp ? [p.plen] : null,
+    'tcp.flags.syn': (p) => p.tcp ? [p.tcp.flags.includes('SYN') ? 1 : 0] : null,
+    'tcp.flags.ack': (p) => p.tcp ? [p.tcp.flags.includes('ACK') ? 1 : 0] : null,
+    'tcp.flags.fin': (p) => p.tcp ? [p.tcp.flags.includes('FIN') ? 1 : 0] : null,
+    'tcp.flags.push': (p) => p.tcp ? [p.tcp.flags.includes('PSH') ? 1 : 0] : null,
+    'http.request': (p) => has(p, 'http') && p.tcp.dp === 80 ? [1] : null,
+    'http.response': (p) => has(p, 'http') && p.tcp.sp === 80 ? [1] : null,
+    'arp.opcode': (p) => p.arp ? [p.arp.op] : null
+  };
+  function tokenize(s) {
+    const re = /\s*(\|\||&&|==|!=|>=|<=|>|<|!|\(|\)|"[^"]*"|[A-Za-z0-9_.:]+)\s*/y, out = [];
+    let pos = 0;
+    while (pos < s.length) { re.lastIndex = pos; const m = re.exec(s); if (!m) return null; out.push(m[1]); pos = re.lastIndex; }
+    return out;
+  }
+  function compile(src) {
+    const tk = tokenize(src);
+    if (!tk || !tk.length) throw 0;
+    let i = 0;
+    const peek = () => tk[i], next = () => tk[i++];
+    const OPS = ['==', '!=', '>', '<', '>=', '<=', 'eq', 'ne', 'gt', 'lt', 'ge', 'le'];
+    const OPN = { eq: '==', ne: '!=', gt: '>', lt: '<', ge: '>=', le: '<=' };
+    function orE() { let a = andE(); while (peek() === '||' || peek() === 'or') { next(); const l = a, r = andE(); a = (p) => l(p) || r(p); } return a; }
+    function andE() { let a = notE(); while (peek() === '&&' || peek() === 'and') { next(); const l = a, r = notE(); a = (p) => l(p) && r(p); } return a; }
+    function notE() { if (peek() === '!' || peek() === 'not') { next(); const a = notE(); return (p) => !a(p); } return prim(); }
+    function prim() {
+      const t = next();
+      if (t === undefined) throw 0;
+      if (t === '(') { const e = orE(); if (next() !== ')') throw 0; return e; }
+      const get = FIELDS[t];
+      if (!get) throw 0;
+      if (OPS.includes(peek())) {
+        let op = next(); op = OPN[op] || op;
+        let v = next();
+        if (v === undefined || ['(', ')', '!', '&&', '||'].includes(v)) throw 0;
+        v = v.replace(/^"|"$/g, '');
+        const num = /^\d+$/.test(v) ? +v : null;
+        const cmp = (a) => {
+          const A = typeof a === 'number' && num !== null ? a : String(a), B = typeof a === 'number' && num !== null ? num : v;
+          switch (op) { case '==': return A === B; case '!=': return A !== B; case '>': return A > B; case '<': return A < B; case '>=': return A >= B; default: return A <= B; }
+        };
+        return (p) => { const vals = get(p); if (!vals || !vals.length) return false; return op === '!=' ? vals.every(cmp) : vals.some(cmp); };
+      }
+      return (p) => { const vals = get(p); return !!(vals && vals.length); };
+    }
+    const e = orE();
+    if (i !== tk.length) throw 0;
+    return e;
+  }
+
+  const wsRows = $('wsRows'), wsFilter = $('wsFilter'), wsTree = $('wsTree'), wsBytes = $('wsBytes');
+  let wsSel = 7, wsShown = PK.slice();
+  function fmtT(t) { return t.toFixed(6); }
+  function rowsRender() {
+    wsRows.innerHTML = wsShown.map((p) =>
+      `<tr class="${p.row}${p.no - 1 === wsSel ? ' sel' : ''}" data-i="${p.no - 1}" tabindex="0"><td>${p.no}</td><td>${fmtT(p.t)}</td><td>${esc(p.src)}</td><td>${esc(p.dst)}</td><td>${p.proto}</td><td>${p.len}</td><td>${esc(p.info)}</td></tr>`).join('') ||
+      '<tr><td colspan="7" style="color:#7D8591; padding:10px 8px">niciun pachet nu trece de filtru</td></tr>';
+    $('wsCnt').textContent = `Afișate: ${wsShown.length} din ${PK.length}`;
+  }
+  function tree(p) {
+    let off = 0; const rng = {};
+    p.segs.forEach((s) => { rng[s.k] = [off, off + s.b.length]; off += s.b.length; });
+    const L = [{ k: 'frame', title: `Frame ${p.no}: ${p.len} bytes on wire (${p.len * 8} bits), ${p.len} bytes captured`, f: [`Time since first frame: ${fmtT(p.t)} seconds`, `Frame Length: ${p.len} bytes`, `Protocols in frame: ${p.segs.map((s) => ({ eth: 'eth', arp: 'arp', ip: 'ip', tcp: 'tcp', udp: 'udp', dns: 'dns', http: 'http' })[s.k]).join(':')}`] }];
+    L.push({ k: 'eth', title: `Ethernet II, Src: ${p.eth.src}, Dst: ${p.eth.dst}`, f: [`Destination: ${p.eth.dst}`, `Source: ${p.eth.src}`, `Type: ${p.arp ? 'ARP (0x0806)' : 'IPv4 (0x0800)'}`] });
+    if (p.arp) {
+      const a = p.arp;
+      L.push({ k: 'arp', title: `Address Resolution Protocol (${a.op === 1 ? 'request' : 'reply'})`, f: ['Hardware type: Ethernet (1)', 'Protocol type: IPv4 (0x0800)', `Opcode: ${a.op === 1 ? 'request (1)' : 'reply (2)'}`, `Sender MAC address: ${a.sha}`, `Sender IP address: ${a.spa}`, `Target MAC address: ${a.tha}`, `Target IP address: ${a.tpa}`] });
+      return L;
+    }
+    const ipb = p.segs[1].b;
+    L.push({ k: 'ip', title: `Internet Protocol Version 4, Src: ${p.ip.src}, Dst: ${p.ip.dst}`, f: ['0100 .... = Version: 4', '.... 0101 = Header Length: 20 bytes (5)', `Total Length: ${p.len - 14}`, `Identification: 0x${hex(p.ip.id, 4)} (${p.ip.id})`, "Flags: 0x2, Don't fragment", 'Time to Live: 64', `Protocol: ${p.tcp ? 'TCP (6)' : 'UDP (17)'}`, `Header Checksum: 0x${hex(ipb[10] * 256 + ipb[11], 4)}`, `Source Address: ${p.ip.src}`, `Destination Address: ${p.ip.dst}`] });
+    if (p.tcp) {
+      const t = p.tcp, hl = 20 + t.opts.length;
+      L.push({ k: 'tcp', title: `Transmission Control Protocol, Src Port: ${t.sp}, Dst Port: ${t.dp}, Seq: ${t.seq}` + (t.ack != null ? `, Ack: ${t.ack}` : '') + `, Len: ${p.plen}`,
+        f: [`Source Port: ${t.sp}`, `Destination Port: ${t.dp}`, `Sequence Number: ${t.seq}    (relative sequence number)`, `Sequence Number (raw): ${(t.seq + t.isn) >>> 0}`]
+          .concat(t.ack != null ? [`Acknowledgment Number: ${t.ack}    (relative ack number)`, `Acknowledgment number (raw): ${(t.ack + t.peer) >>> 0}`] : [])
+          .concat([`Header Length: ${hl} bytes (${hl / 4})`, `Flags: 0x${hex(flagsByte(t.flags), 3)} (${t.flags.join(', ')})`, `Window: ${t.win}`])
+          .concat(t.opts.length ? ['Options: (12 bytes), Maximum segment size, No-Operation (NOP), No-Operation (NOP), SACK permitted, No-Operation (NOP), Window scale'] : [])
+          .concat(p.plen ? [`TCP payload (${p.plen} bytes)`] : []) });
+    } else {
+      L.push({ k: 'udp', title: `User Datagram Protocol, Src Port: ${p.udp.sp}, Dst Port: ${p.udp.dp}`, f: [`Source Port: ${p.udp.sp}`, `Destination Port: ${p.udp.dp}`, `Length: ${8 + p.plen}`, `UDP payload (${p.plen} bytes)`] });
+    }
+    if (p.dns) {
+      L.push({ k: 'dns', title: `Domain Name System (${p.dns === 'q' ? 'query' : 'response'})`, f: ['Transaction ID: 0x1a2b', p.dns === 'q' ? 'Flags: 0x0100 Standard query' : 'Flags: 0x8180 Standard query response, No error', 'Questions: 1', `Answer RRs: ${p.dns === 'q' ? 0 : 1}`, 'Queries: example.com: type A, class IN'].concat(p.dns === 'r' ? [`Answers: example.com: type A, class IN, addr ${SIP} (TTL 3600)`] : []) });
+    }
+    if (has(p, 'http')) {
+      const head = p.app.txt.split('\r\n\r\n')[0].split('\r\n').map((s) => s + '\\r\\n');
+      head.push('\\r\\n');
+      if (p.tcp.sp === 80) head.push('File Data: 1256 bytes', 'Line-based text data: text/html (5 lines)');
+      L.push({ k: 'http', title: 'Hypertext Transfer Protocol', f: head });
+    }
+    return L;
+  }
+  function bytesHTML(p) {
+    const all = [];
+    p.segs.forEach((s) => s.b.forEach((b) => all.push([b, s.k])));
+    const MAX = 208, n = Math.min(all.length, MAX);
+    let h = '';
+    for (let r = 0; r < n; r += 16) {
+      h += `<span class="off">${hex(r, 4)}</span>  `;
+      let a = '';
+      for (let i = r; i < r + 16; i++) {
+        if (i < n) {
+          const [b, k] = all[i], st = `style="--c:${LC[k]}" data-k="${k}"`;
+          h += `<span class="by" ${st}>${hex(b)}</span>`;
+          a += `<span class="by" ${st}>${b >= 32 && b < 127 ? esc(String.fromCharCode(b)) : '·'}</span>`;
+        } else h += '  ';
+        h += i === r + 7 ? '  ' : ' ';
+      }
+      h += ' ' + a + '\n';
+    }
+    if (all.length > MAX) h += `<span class="off">… încă ${all.length - MAX} octeți</span>`;
+    return h;
+  }
+  function hl(k) {
+    wsBytes.querySelectorAll('.by').forEach((s) => s.classList.toggle('hl', k === 'frame' || s.dataset.k === k));
+  }
+  function detail() {
+    const p = PK[wsSel];
+    if (!p || !wsShown.includes(p)) { wsTree.innerHTML = ''; wsBytes.innerHTML = ''; return; }
+    wsTree.innerHTML = tree(p).map((L) =>
+      `<details style="--c:${LC[L.k]}" data-k="${L.k}"${L.k === 'frame' ? '' : ' open'}><summary>${esc(L.title)}</summary>${L.f.map((f) => `<div class="f">${esc(f)}</div>`).join('')}</details>`).join('');
+    wsBytes.innerHTML = bytesHTML(p);
+    wsTree.querySelectorAll('details').forEach((d) => {
+      const s = d.querySelector('summary');
+      s.addEventListener('mouseenter', () => hl(d.dataset.k));
+      s.addEventListener('focus', () => hl(d.dataset.k));
+    });
+    wsTree.addEventListener('mouseleave', () => hl(null));
+  }
+  function applyFilter() {
+    const s = wsFilter.value.trim();
+    if (!s) { wsShown = PK.slice(); wsFilter.className = ''; }
+    else {
+      let f;
+      try { f = compile(s); } catch (e) { wsFilter.className = 'bad'; return; }
+      wsFilter.className = 'ok';
+      wsShown = PK.filter(f);
+    }
+    if (!wsShown.includes(PK[wsSel]) && wsShown.length) wsSel = wsShown[0].no - 1;
+    rowsRender(); detail();
+  }
+  wsFilter.addEventListener('input', () => {
+    const s = wsFilter.value.trim();
+    if (!s) { wsFilter.className = ''; return; }
+    try { compile(s); wsFilter.className = 'ok'; } catch (e) { wsFilter.className = 'bad'; }
+  });
+  $('wsForm').addEventListener('submit', (e) => { e.preventDefault(); applyFilter(); });
+  wsRows.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    wsSel = +tr.dataset.i; rowsRender(); detail();
+    wsRows.querySelector(`tr[data-i="${wsSel}"]`)?.focus({ preventScroll: true });
+  });
+  wsRows.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const idx = wsShown.indexOf(PK[wsSel]), nx = wsShown[Math.max(0, Math.min(wsShown.length - 1, idx + (e.key === 'ArrowDown' ? 1 : -1)))];
+    if (!nx) return;
+    wsSel = nx.no - 1; rowsRender(); detail();
+    const tr = wsRows.querySelector(`tr[data-i="${wsSel}"]`); if (tr) { tr.focus({ preventScroll: true }); tr.scrollIntoView({ block: 'nearest' }); }
+  });
+  ['ip.addr == 192.0.2.1', 'tcp.port == 80 || udp.port == 80', 'http', 'dns', 'tcp.flags.syn == 1', '!arp', 'udp', 'host 192.0.2.1'].forEach((f) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = f;
+    b.addEventListener('click', () => { wsFilter.value = f; wsFilter.dispatchEvent(new Event('input')); applyFilter(); });
+    $('wsChips').appendChild(b);
+  });
+  rowsRender(); detail();
+
+  // ---------- 11 tcpdump, generat din aceeași captură ----------
+  (function () {
+    const tdF = (f) => (f.includes('SYN') ? 'S' : '') + (f.includes('FIN') ? 'F' : '') + (f.includes('PSH') ? 'P' : '') + (f.includes('ACK') ? '.' : '');
+    const lines = [['pr', '$ sudo tcpdump -i wlp0s20f3 -n host ' + SIP], ['rx', 'tcpdump: verbose output suppressed, use -v[v]... for full protocol decode'], ['rx', 'listening on wlp0s20f3, link-type EN10MB (Ethernet), snapshot length 262144 bytes']];
+    const sel = PK.filter((p) => p.ip && (p.ip.src === SIP || p.ip.dst === SIP));
+    sel.forEach((p) => {
+      const t = p.tcp, us = Math.round(20000 + p.t * 1e6);
+      let s = `12:04:31.${String(us).padStart(6, '0')} IP ${p.ip.src}.${t.sp} > ${p.ip.dst}.${t.dp}: Flags [${tdF(t.flags)}]`;
+      if (t.flags.includes('SYN')) {
+        s += `, seq ${(t.seq + t.isn) >>> 0}`;
+        if (t.ack != null) s += `, ack ${(t.ack + t.peer) >>> 0}`;
+        s += `, win ${t.win}, options [mss 1460,nop,nop,sackOK,nop,wscale 7], length 0`;
+      } else {
+        if (p.plen) s += `, seq ${t.seq}:${t.seq + p.plen}`;
+        else if (t.flags.includes('FIN')) s += `, seq ${t.seq}`;
+        s += `, ack ${t.ack}, win ${t.win}, length ${p.plen}`;
+        if (p.plen) s += `: HTTP: ${p.app.txt.split('\r\n')[0]}`;
+      }
+      lines.push([p.plen ? 'ok' : 'me', s]);
+    });
+    lines.push(['pr', '^C'], ['rx', `${sel.length} packets captured`], ['rx', `${sel.length} packets received by filter`], ['rx', '0 packets dropped by kernel']);
+    const term = $('tdTerm');
+    lines.forEach((l) => { const d = document.createElement('div'); d.className = l[0]; d.textContent = l[1]; term.appendChild(d); });
+  })();
+
+  // ---------- 13 file descriptors ----------
+  const fdTab = $('fdTab'), fdLog = $('fdLog');
+  const MAXFD = 8;
+  let fds, fdSel, fdFiles, fdSocks;
+  function fdReset() {
+    fds = { 0: ['std', 'stdin (tastatura)'], 1: ['std', 'stdout (terminalul)'], 2: ['std', 'stderr (terminalul)'] };
+    fdSel = null; fdFiles = 0; fdSocks = 0;
+    fdLog.innerHTML = '<span style="color:#7D8591">// procesul abia a pornit</span>\n';
+    fdRender();
+  }
+  function lowest() { for (let i = 0; i < MAXFD; i++) if (!fds[i]) return i; return -1; }
+  function fdRender() {
+    let h = '';
+    for (let i = 0; i < MAXFD; i++) {
+      const e = fds[i];
+      if (e) h += `<button type="button" class="fdrow ${e[0]}${fdSel === i ? ' sel' : ''}" data-fd="${i}" aria-pressed="${fdSel === i}"><b>${i}</b><i>→</i><span>${esc(e[1])}</span></button>`;
+      else h += `<div class="fdrow free"><b>${i}</b><i></i><span>liber</span></div>`;
+    }
+    fdTab.innerHTML = h;
+    $('fdClose').textContent = fdSel === null ? 'close(fd)' : `close(${fdSel})`;
+    $('fdClose').disabled = fdSel === null;
+  }
+  function logCall(call, ret, note) {
+    const cls = ret < 0 ? 'err' : 'ret';
+    fdLog.innerHTML += `${esc(call)} = <span class="${cls}">${ret}</span>${note ? '  <span style="color:#7D8591">// ' + esc(note) + '</span>' : ''}\n`;
+    fdLog.scrollTop = fdLog.scrollHeight;
+  }
+  function fdNew(kind) {
+    const n = lowest();
+    const call = kind === 'file' ? 'open("date.txt", O_RDONLY)' : 'socket(AF_INET, SOCK_DGRAM, 0)';
+    if (n < 0) { logCall(call, -1, 'EMFILE: tabela e plină (demo: 8 intrări)'); return; }
+    if (kind === 'file') { fdFiles++; fds[n] = ['file', fdFiles > 1 ? `date.txt (deschis a ${fdFiles}-a oară)` : 'date.txt']; }
+    else { fdSocks++; fds[n] = ['sock', 'socket UDP' + (fdSocks > 1 ? ' #' + fdSocks : '')]; }
+    logCall(call, n, n === 1 ? 'stdout de acum e acest ' + (kind === 'file' ? 'fișier!' : 'socket!') : (n < 3 ? 'a luat locul unui standard' : 'cel mai mic liber'));
+    fdSel = null; fdRender();
+  }
+  fdTab.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-fd]'); if (!b) return;
+    const i = +b.dataset.fd; fdSel = fdSel === i ? null : i; fdRender();
+    fdTab.querySelector(`button[data-fd="${i}"]`)?.focus();
+  });
+  $('fdOpen').addEventListener('click', () => fdNew('file'));
+  $('fdSock').addEventListener('click', () => fdNew('sock'));
+  $('fdClose').addEventListener('click', () => {
+    if (fdSel === null) return;
+    const i = fdSel; delete fds[i]; fdSel = null;
+    logCall(`close(${i})`, 0, i < 3 ? 'locul ' + i + ' e liber acum' : '');
+    fdRender();
+  });
+  $('fdReset').addEventListener('click', fdReset);
+  fdReset();
+
+  // bucla de read
+  const rSize = $('rSize'); let rBuf = 1024;
+  function rloop() {
+    const N = +rSize.value; $('rSizeO').textContent = N + ' B';
+    const calls = []; let left = N;
+    while (left > 0) { const k = Math.min(rBuf, left); calls.push(k); left -= k; }
+    const cols = [BLUE, ORANGE, GREEN, '#7B45B8', '#0E8C8C', '#B0417A'];
+    $('rChunks').innerHTML = N ? calls.map((k, i) => `<div class="chunk" style="--c:${cols[i % cols.length]}; width:${k / N * 100}%" title="apelul ${i + 1}: ${k} octeți">${k / N > 0.07 ? '#' + (i + 1) + ' · ' + k : ''}</div>`).join('') : '<div class="empty-file">fișier gol</div>';
+    $('rLog').innerHTML = calls.map((k, i) => `read(fd, buf, ${rBuf}) = <span class="ret">${k}</span>${k < rBuf ? '  <span style="color:#7D8591">// mai puțin decât am cerut: atât a rămas</span>' : ''}`)
+      .concat([`read(fd, buf, ${rBuf}) = <span class="err">0</span>  <span style="color:#7D8591">// sfârșit de fișier, ieșim din buclă</span>`]).join('\n');
+  }
+  rSize.addEventListener('input', rloop);
+  document.querySelectorAll('[data-buf]').forEach((b) => b.addEventListener('click', () => {
+    rBuf = +b.dataset.buf;
+    document.querySelectorAll('[data-buf]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    rloop();
+  }));
+  rloop();
+
+  // ---------- 14 UDP ----------
+  (function () {
+    const p = pen($('dUdp'), 19);
+    p.rect(14, 40, 300, 270, { strokeWidth: 2.4 });
+    p.text(30, 30, 'receptor · ./udp_socket', 'hs');
+    p.rect(446, 40, 300, 270, { strokeWidth: 2.4 });
+    p.text(462, 30, 'emițător · ./udp_socket -s', 'hs');
+    p.rect(330, 40, 100, 270, { fill: FILL, fillStyle: 'solid', stroke: MUTE, strokeWidth: 1.4 });
+    p.text(380, 70, 'lo', 'h', 'middle', BLUE);
+    p.text(380, 92, '127.0.0.1', 'ms', 'middle');
+    const R = [['socket(AF_INET, SOCK_DGRAM, 0)', '→ fd 3'], ['bind(fd, 127.0.0.1:5000)', 'ocupă portul'], ['recvfrom(fd, buf, …)', 'așteaptă…'], ['printf("%s", buf)', 'Hello World']];
+    const S = [['socket(AF_INET, SOCK_DGRAM, 0)', '→ fd 3'], ['sendto(fd, "Hello World",', '  127.0.0.1:5000)']];
+    R.forEach((r, i) => {
+      const y = 76 + i * 60;
+      p.text(30, y, r[0], 'm'); p.text(30, y + 20, r[1], 'ms', 'start', i === 3 ? GREEN : INK2);
+      if (i < R.length - 1) p.arrow(150, y + 28, 150, y + 42, { stroke: MUTE, strokeWidth: 1.4 });
+    });
+    S.forEach((r, i) => {
+      const y = 76 + i * 60;
+      p.text(462, y, r[0], 'm'); p.text(462, y + (i === 1 ? 18 : 20), r[1], i === 1 ? 'm' : 'ms');
+      if (i === 0) p.arrow(582, y + 28, 582, y + 42, { stroke: MUTE, strokeWidth: 1.4 });
+    });
+    // datagrama
+    p.arrow(455, 150, 318, 200, { stroke: '#0E8C8C', strokeWidth: 2.4 });
+    p.rect(340, 156, 80, 36, { fill: '#BFE6E6', fillStyle: 'solid', stroke: '#0E8C8C', strokeWidth: 1.8 });
+    p.text(380, 172, 'Hello World', 'ms', 'middle');
+    p.text(380, 186, '11 B', 'ms', 'middle');
+    p.text(380, 250, 'nicio conexiune:', 'ts', 'middle');
+    p.text(380, 268, 'o datagramă', 'ts', 'middle');
+    p.text(380, 286, 'pleacă și gata', 'ts', 'middle');
+    p.text(462, 230, 'pornește-l după receptor:', 'ts');
+    p.text(462, 250, 'UDP nu așteaptă pe nimeni,', 'ts');
+    p.text(462, 270, 'dacă nu ascultă nimeni,', 'ts');
+    p.text(462, 290, 'datagrama se pierde', 'ts', 'start', RED);
+  })();
+
+  // ---------- mod întunecat ----------
+  const themeBtn = $('themeBtn'), root = document.documentElement;
+  function syncTheme() {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    themeBtn.setAttribute('aria-pressed', String(dark));
+    themeBtn.textContent = dark ? '☀ mod luminos' : '☾ mod întunecat';
+  }
+  themeBtn.addEventListener('click', () => {
+    const dark = root.getAttribute('data-theme') !== 'dark';
+    if (dark) root.setAttribute('data-theme', 'dark'); else root.removeAttribute('data-theme');
+    try { localStorage.setItem('pcom-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    syncTheme();
+  });
+  syncTheme();
+
+  // ---------- copiere ----------
+  document.querySelectorAll('[data-copy]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const code = b.closest('.code').querySelector('code');
+      const sel = () => { const r = document.createRange(); r.selectNodeContents(code); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+      try { navigator.clipboard.writeText(code.innerText).then(() => { b.textContent = 'Copiat'; setTimeout(() => { b.textContent = 'Copiază'; }, 1400); }, sel); } catch (e) { sel(); }
+    });
+  });
+
+  // ---------- tabla curentă în bara de sus ----------
+  const navs = Array.from(document.querySelectorAll('.top nav a'));
+  const boards = Array.from(document.querySelectorAll('.board'));
+  let ticking = false;
+  function markActive() {
+    ticking = false;
+    const line = window.innerHeight / 3; let cur = boards[0];
+    boards.forEach((b) => { if (b.getBoundingClientRect().top <= line) cur = b; });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) cur = boards[boards.length - 1];
+    navs.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + cur.id));
+  }
+  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; setTimeout(markActive, 60); } }, { passive: true });
+  window.addEventListener('resize', markActive);
+  markActive();
+})();
+</script>
+</body>
+</html>

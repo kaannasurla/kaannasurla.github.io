@@ -1,0 +1,1243 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<script>
+  // tema se aplică înainte de desenare, ca să nu clipească pagina
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('pcom-theme'); } catch (e) {}
+    if (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<title>PCom Laborator 3 · Detectarea erorilor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Shantell+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&subset=latin-ext&display=swap">
+<style>
+/* Caiet de matematică cu grilă albastră. Culorile sunt toate aici, ușor de schimbat. */
+:root {
+  color-scheme: light;
+  --paper: #FCFCFB;
+  --grid: #DCE6F5;
+  --ink: #1E2229;
+  --ink-2: #4B5360;
+  --mute: #7D8591;
+  --blue: #1D5FBF;
+  --red: #D03A2F;
+  --green: #2E8B3E;
+  --hi: #CFE0FF;
+  /* culorile nivelurilor, folosite peste tot: încapsulare, Wireshark, OSI */
+  --eth: #7B45B8; --arp: #B0417A; --ip: #1D5FBF; --tcp: #2E8B3E; --udp: #0E8C8C; --app: #D9822B;
+  --k0: #1D5FBF; --k1: #D9822B; --k2: #2E8B3E; --k3: #7B45B8; --k4: #0E8C8C; --k5: #B0417A;
+  --card: #FFFFFF; --card-2: #F4F6F8; --chip: #EEF1F4; --rule: #C5CCD5; --on-blue: #FFFFFF;
+  --r-arp: #FAF0D7; --r-dns: #DAEEFF; --r-http: #E4FFC7; --r-tcp: #E7E6FF; --r-synfin: #DDDDDD; --f-ok: #D9F2DC; --f-bad: #F9D6D3;
+  --hand: "Caveat", "Shantell Sans", "Segoe UI", sans-serif;
+  --body: "Shantell Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 18px;
+  line-height: 1.5;
+  padding-inline: 18px;
+  padding-block: 0 96px;
+}
+a { color: var(--blue); }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.82em; background: var(--chip); padding: 0.05em 0.35em; border-radius: 3px; }
+h1, h2 { font-family: var(--hand); font-weight: 700; margin: 0; line-height: 1; text-wrap: balance; }
+p { margin: 0; }
+
+/* bară sus */
+.top {
+  position: sticky; top: 0; z-index: 5;
+  margin-inline: -18px; padding: 8px 18px;
+  background: var(--paper); border-bottom: 2px solid var(--ink);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px;
+}
+.top b { font-family: var(--hand); font-size: 24px; }
+.top .lab-title { font-size: 20px; font-weight: 600; color: var(--blue); margin-left: 6px; }
+.top nav { order: 3; flex-basis: 100%; overflow-x: auto; display: flex; gap: 4px; }
+.top nav a {
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); text-decoration: none;
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; flex: none;
+}
+.top nav a:hover { background: var(--chip); color: var(--ink); }
+.top nav a.on { background: var(--ink); color: var(--paper); }
+
+.wrap { max-width: 960px; margin: 0 auto; display: grid; gap: 110px; padding-top: 56px; }
+.board { display: grid; gap: 22px; scroll-margin-top: 100px; }
+.board-head { display: grid; gap: 2px; }
+.no { font-family: var(--mono); font-size: 13px; color: var(--mute); letter-spacing: 0.06em; }
+.board h2 { font-size: clamp(2.4rem, 5.4vw, 3.4rem); }
+.board h2 u, .board h3.mini u { text-decoration: none; background: linear-gradient(transparent 62%, var(--hi) 62%, var(--hi) 92%, transparent 92%); }
+.cap { color: var(--ink-2); max-width: 66ch; }
+.board h3.mini { font-family: var(--hand); font-size: clamp(1.8rem, 3.6vw, 2.3rem); line-height: 1; margin: 18px 0 0; }
+
+/* hero */
+.hero { display: grid; gap: 14px; padding-top: 20px; }
+.hero h1 { font-size: clamp(3.4rem, 10vw, 6.6rem); }
+.hero .sub { font-family: var(--hand); font-size: clamp(1.8rem, 4.4vw, 2.6rem); color: var(--blue); }
+.hero .tags { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 14px; color: var(--ink-2); }
+.hero svg { width: 100%; max-width: 760px; height: auto; }
+
+/* diagrame */
+.fig { overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 600px; height: auto; }
+svg text { fill: #1F3155; }
+svg .t { font-family: var(--body); font-size: 15px; }
+svg .ts { font-family: var(--body); font-size: 13px; fill: var(--ink-2); }
+svg .h { font-family: var(--hand); font-size: 26px; font-weight: 700; }
+svg .hs { font-family: var(--hand); font-size: 22px; font-weight: 700; }
+svg .m { font-family: var(--mono); font-size: 13px; }
+svg .ms { font-family: var(--mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .hit { cursor: pointer; }
+
+/* cod */
+.code {
+  background: var(--card); border: 2px solid var(--ink); border-radius: 3px;
+  box-shadow: 4px 4px 0 var(--ink); overflow: hidden; min-width: 0;
+}
+.code .bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 4px 6px 4px 12px; border-bottom: 2px solid var(--ink);
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2); background: var(--card-2); min-height: 30px;
+}
+.code .bar button {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--card); border: 1.5px solid var(--ink);
+  border-radius: 3px; padding: 1px 8px; cursor: pointer;
+}
+.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.55; }
+.code pre code { background: none; padding: 0; font-size: inherit; }
+.code.bad { border-color: var(--red); box-shadow: 4px 4px 0 var(--red); }
+.code.bad .bar { border-color: var(--red); color: var(--red); }
+.code.good { border-color: var(--green); box-shadow: 4px 4px 0 var(--green); }
+.code.good .bar { border-color: var(--green); color: var(--green); }
+.hljs-keyword, .hljs-type, .hljs-built_in { color: #1F5FBF; }
+.hljs-string { color: #2E8B3E; }
+.hljs-comment { color: #858C97; font-style: italic; }
+.hljs-number, .hljs-literal { color: #B35C00; }
+.hljs-title, .hljs-title.function_ { color: #7B45B8; }
+.hljs-meta { color: #C8467F; }
+
+/* cerere adnotată */
+.sig { font-family: var(--mono); font-size: 16px; overflow-x: auto; white-space: nowrap; padding: 6px 2px 10px; line-height: 2; }
+.sig .p { border-bottom: 3px solid; padding-bottom: 2px; }
+.sig .crlf { color: var(--mute); font-size: 13px; margin-left: 4px; }
+.p0 { border-color: var(--k0) !important; } .p1 { border-color: var(--k1) !important; } .p2 { border-color: var(--k2) !important; }
+.p3 { border-color: var(--k3) !important; } .p4 { border-color: var(--k4) !important; } .p5 { border-color: var(--k5) !important; }
+.keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
+.key { display: grid; gap: 2px; font-size: 16px; align-content: start; }
+.key > code { justify-self: start; font-size: 14px; box-shadow: inset 0 -3px var(--c); }
+.key span { color: var(--ink-2); }
+
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; align-items: start; }
+
+/* formule */
+.formula { font-family: var(--hand); font-size: clamp(1.8rem, 4.2vw, 2.4rem); line-height: 1.25; display: grid; gap: 2px; }
+.formula small { font-family: var(--body); font-size: 16px; color: var(--mute); }
+.formula .b { color: var(--blue); } .formula .r { color: var(--red); }
+
+/* tabele */
+.cmds { width: 100%; border-collapse: collapse; font-size: 16px; }
+.cmds td, .cmds th { padding: 8px 10px; border-bottom: 1.5px dashed var(--rule); vertical-align: top; text-align: left; }
+.cmds th { font-family: var(--mono); font-size: 12px; color: var(--mute); font-weight: 400; border-bottom: 2px solid var(--ink); }
+.cmds td:first-child { font-family: var(--hand); font-size: 23px; font-weight: 700; white-space: nowrap; width: 1%; padding-right: 22px; line-height: 1.2; }
+.cmds code { font-size: 14px; white-space: nowrap; }
+.cmds.plain td:first-child { font-family: var(--body); font-size: 16px; font-weight: 400; white-space: normal; width: auto; }
+.tbl { overflow-x: auto; }
+
+/* controale */
+.ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 30px; }
+.ctl { display: grid; gap: 0; font-size: 16px; }
+.ctl output { font-family: var(--hand); font-size: 30px; font-weight: 700; line-height: 1; color: var(--blue); }
+.ctl input[type="range"] { width: 210px; max-width: 100%; accent-color: var(--ink); }
+.ctl input[type="text"] { font-family: var(--mono); font-size: 18px; width: 120px; padding: 3px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); color: var(--ink); }
+.seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; }
+.seg button { font: inherit; font-size: 15px; padding: 4px 12px; border: 0; background: var(--card); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 2px solid var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.btn {
+  font: inherit; font-size: 16px; font-weight: 700; padding: 6px 16px; cursor: pointer;
+  background: var(--hi); color: var(--ink); border: 2px solid var(--ink); border-radius: 3px; box-shadow: 3px 3px 0 var(--ink);
+}
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.ghost { background: var(--card); font-weight: 600; }
+.stat { font-family: var(--hand); font-size: 28px; font-weight: 700; line-height: 1.1; }
+.stat.ok { color: var(--green); } .stat.ko { color: var(--red); } .stat.info { color: var(--blue); }
+
+/* terminal */
+.term {
+  background: #15181D; color: #E6E9EF; border-radius: 4px; padding: 14px 16px; min-height: 120px;
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.55; overflow: auto; box-shadow: 4px 4px 0 var(--ink);
+  white-space: pre;
+}
+.term div { min-height: 1.55em; }
+.term .pr { color: #8A93A0; }
+.term .me { color: #FFFFFF; }
+.term .rx { color: #9CC4FF; }
+.term .ok { color: #9BE29B; }
+.term .an { color: #FFD27F; font-style: italic; }
+.term .er { color: #FF8F8F; }
+.term .cur::after { content: "▌"; color: #9CC4FF; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.chat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.pane { display: grid; gap: 8px; min-width: 0; }
+.pane .lbl { font-family: var(--hand); font-size: 26px; font-weight: 700; line-height: 1; }
+.pane .term { height: 230px; }
+.pane form { display: flex; gap: 8px; }
+.pane input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 14px; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); color: var(--ink); }
+.pane input:disabled { background: var(--chip); }
+
+/* Wireshark de jucărie */
+.ws { border: 2px solid var(--ink); border-radius: 3px; box-shadow: 4px 4px 0 var(--ink); background: var(--card); font-family: var(--mono); font-size: 12.5px; overflow: hidden; }
+.ws-title { padding: 4px 10px; background: var(--ink); color: var(--paper); font-size: 12px; display: flex; justify-content: space-between; gap: 10px; }
+.ws-bar { display: flex; gap: 6px; padding: 6px; border-bottom: 2px solid var(--ink); background: var(--card-2); align-items: center; }
+.ws-bar input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; padding: 4px 8px; border: 1.5px solid var(--mute); border-radius: 3px; background: var(--card); color: var(--ink); }
+.ws-bar input.ok { background: var(--f-ok); border-color: #6FB27A; }
+.ws-bar input.bad { background: var(--f-bad); border-color: #D88A84; }
+.ws-bar button { font: inherit; padding: 3px 10px; border: 1.5px solid var(--ink); border-radius: 3px; background: var(--card); cursor: pointer; }
+.ws-bar .cnt { color: var(--ink-2); white-space: nowrap; }
+.ws-list { height: 238px; overflow: auto; border-bottom: 2px solid var(--ink); }
+.ws-list table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.ws-list th { position: sticky; top: 0; background: var(--card-2); text-align: left; padding: 3px 8px; font-weight: 600; border-bottom: 1px solid var(--rule); z-index: 1; }
+.ws-list td { padding: 2px 8px; cursor: pointer; }
+.ws-list tr.r-arp td { background: var(--r-arp); }
+.ws-list tr.r-dns td { background: var(--r-dns); }
+.ws-list tr.r-http td { background: var(--r-http); }
+.ws-list tr.r-tcp td { background: var(--r-tcp); }
+.ws-list tr.r-synfin td { background: var(--r-synfin); }
+.ws-list tr.sel td { background: var(--blue); color: var(--on-blue); }
+.ws-list tr:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.ws-tree { padding: 6px 10px; border-bottom: 2px solid var(--ink); height: 210px; overflow: auto; }
+.ws-tree details { border-left: 4px solid var(--c); padding-left: 8px; margin: 3px 0; }
+.ws-tree summary { cursor: pointer; white-space: nowrap; }
+.ws-tree summary:hover { background: color-mix(in srgb, var(--c) 14%, transparent); }
+.ws-tree .f { padding-left: 18px; color: var(--ink-2); white-space: nowrap; }
+.ws-bytes { padding: 6px 10px; overflow: auto; white-space: pre; line-height: 1.5; height: 170px; }
+.ws-bytes .off { color: var(--mute); }
+.ws-bytes .by { box-shadow: inset 0 -2px color-mix(in srgb, var(--c) 55%, transparent); }
+.ws-bytes .by.hl { background: color-mix(in srgb, var(--c) 30%, transparent); box-shadow: inset 0 -2px var(--c); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.chips button { font-family: var(--mono); font-size: 13px; padding: 2px 9px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--card); cursor: pointer; color: var(--ink); }
+.chips button:hover { background: var(--hi); }
+.chips span { font-size: 15px; color: var(--ink-2); margin-right: 4px; }
+.lgd { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-size: 13px; }
+.lgd span { display: inline-flex; align-items: center; gap: 6px; }
+.lgd i { width: 14px; height: 14px; border: 2px solid var(--c); background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 45%, transparent) 0 2px, transparent 2px 5px); display: inline-block; }
+
+/* file descriptors */
+.fdtab { display: grid; gap: 6px; }
+.fdrow { display: grid; grid-template-columns: 46px 30px minmax(0, 1fr); align-items: center; gap: 6px; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--card); cursor: pointer; text-align: left; font: inherit; color: var(--ink); }
+.fdrow b { font-family: var(--hand); font-size: 30px; line-height: 1; color: var(--blue); }
+.fdrow i { font-style: normal; color: var(--mute); }
+.fdrow span { font-family: var(--mono); font-size: 13.5px; }
+.fdrow.std b { color: var(--mute); }
+.fdrow.sock { border-color: var(--udp); }
+.fdrow.sock b { color: var(--udp); }
+.fdrow.sel { box-shadow: 3px 3px 0 var(--red); border-color: var(--red); }
+.fdrow.free { border-style: dashed; color: var(--mute); background: transparent; cursor: default; }
+.fdrow.free b { color: var(--rule); }
+.calllog { font-family: var(--mono); font-size: 13.5px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; padding: 8px 12px; min-height: 120px; max-height: 220px; overflow: auto; white-space: pre; }
+.calllog .ret { color: var(--blue); font-weight: 600; }
+.calllog .err { color: var(--red); font-weight: 600; }
+.fdbtns { display: flex; flex-wrap: wrap; gap: 10px; }
+.fdbtns .btn { font-family: var(--mono); font-size: 13.5px; font-weight: 600; }
+
+.chunks { display: flex; height: 46px; border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; background: var(--card); }
+.chunk { display: grid; place-items: center; font-family: var(--mono); font-size: 11.5px; border-right: 2px solid var(--ink); overflow: hidden; white-space: nowrap;
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 30%, transparent) 0 2px, transparent 2px 6px), var(--card); }
+.chunk:last-child { border-right: 0; }
+.empty-file { display: grid; place-items: center; width: 100%; color: var(--mute); font-family: var(--mono); font-size: 13px; }
+
+/* capcane */
+.traps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 26px; }
+.trap { display: grid; gap: 10px; align-content: start; }
+.trap h3 { font-family: var(--hand); font-size: 30px; margin: 0; line-height: 1.05; }
+.trap h3 span { color: var(--red); }
+.trap h3 code { font-size: 0.6em; }
+.trap.wide { grid-column: 1 / -1; }
+
+/* exerciții */
+.exs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 30px; }
+.exs > li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 4px 8px; align-content: start; padding: 14px 0; border-bottom: 1.5px dashed var(--rule); }
+.exs > li > b { font-family: var(--hand); font-size: 38px; color: var(--blue); line-height: 0.9; grid-row: span 4; }
+.exs h3 { font-family: var(--hand); font-size: 28px; line-height: 1.05; margin: 0; }
+.exs h3 code { background: none; font-size: 0.72em; padding: 0; }
+.exs ul { margin: 0; padding-left: 1.1em; font-size: 16.5px; color: var(--ink-2); }
+.exs .snip { font-family: var(--mono); font-size: 12.5px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; padding: 6px 10px; margin: 4px 0 0; overflow-x: auto; white-space: pre; }
+.exs .q { font-family: var(--hand); font-size: 22px; color: var(--red); line-height: 1.15; }
+
+.note { border-left: 4px solid var(--blue); padding: 4px 0 4px 12px; color: var(--ink-2); font-size: 16px; max-width: 72ch; }
+.note b { color: var(--ink); }
+
+footer { font-size: 15px; color: var(--mute); border-top: 2px solid var(--ink); padding-top: 14px; }
+
+@media (max-width: 760px) {
+  .row2, .traps, .exs, .chat { grid-template-columns: minmax(0, 1fr); }
+  .keys { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* tema întunecată: aceleași variabile, alte valori */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #13161B; --grid: #1E2430;
+  --ink: #E3E7EE; --ink-2: #B3BBC7; --mute: #8A93A2;
+  --blue: #7FB0FF; --red: #FF7F73; --green: #72D283; --hi: #2B3F66;
+  --eth: #B691F2; --arp: #E681B6; --ip: #7FB0FF; --tcp: #72D283; --udp: #52D3D3; --app: #F2A65A;
+  --k0: #7FB0FF; --k1: #F2A65A; --k2: #72D283; --k3: #B691F2; --k4: #52D3D3; --k5: #E681B6;
+  --card: #1B1F27; --card-2: #232934; --chip: #262D39; --rule: #3A4352; --on-blue: #0B1220;
+  --r-arp: #3A3322; --r-dns: #1E3248; --r-http: #283A1D; --r-tcp: #2A2944; --r-synfin: #33363D; --f-ok: #1D3A24; --f-bad: #4A2320;
+}
+html[data-theme="dark"] .hljs-keyword, html[data-theme="dark"] .hljs-type, html[data-theme="dark"] .hljs-built_in { color: #8DB8FF; }
+html[data-theme="dark"] .hljs-string { color: #8FDB9C; }
+html[data-theme="dark"] .hljs-comment { color: #8A93A2; }
+html[data-theme="dark"] .hljs-number, html[data-theme="dark"] .hljs-literal { color: #F2B36E; }
+html[data-theme="dark"] .hljs-title, html[data-theme="dark"] .hljs-title.function_ { color: #C3A2F5; }
+html[data-theme="dark"] .hljs-meta { color: #F08DB8; }
+/* desenele sunt făcute cu cerneală închisă: le inversăm luminozitatea, păstrând nuanțele */
+html[data-theme="dark"] .fig svg, html[data-theme="dark"] .hero svg { filter: invert(0.9) hue-rotate(180deg); --ink-2: #4B5360; }
+html[data-theme="dark"] .term { background: #0B0D11; box-shadow: 4px 4px 0 #3A4352; }
+html[data-theme="dark"] .code, html[data-theme="dark"] .ws { box-shadow: 4px 4px 0 #3A4352; }
+html[data-theme="dark"] .code.bad { box-shadow: 4px 4px 0 var(--red); }
+html[data-theme="dark"] .code.good { box-shadow: 4px 4px 0 var(--green); }
+html[data-theme="dark"] .btn { box-shadow: 3px 3px 0 #3A4352; }
+html[data-theme="dark"] .ws-title { background: #0B0D11; color: var(--ink); }
+
+.theme-btn {
+  order: 2; margin-left: auto; align-self: center;
+  font: inherit; font-size: 14px; font-weight: 600; padding: 3px 12px; cursor: pointer;
+  background: var(--card); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; white-space: nowrap;
+}
+.theme-btn:hover { background: var(--hi); }
+
+/* laboratorul 2: biți, octeți, structuri */
+.bitgroups { display: flex; flex-wrap: wrap; gap: 10px; }
+.bg { display: grid; gap: 4px; justify-items: center; }
+.bg > div { display: flex; gap: 2px; padding: 3px; border: 2px solid var(--c, var(--rule)); border-radius: 3px; background: var(--card); }
+.bg small { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+.bg.pre > div { border-style: dashed; opacity: 0.55; }
+.bg.good small { color: var(--green); font-weight: 600; }
+.bg.badg small { color: var(--red); }
+.bitrows { display: grid; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.bitrow, .byterow { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.bitrow .lbl, .byterow .lbl { font-family: var(--hand); font-size: 23px; font-weight: 700; width: 126px; flex: none; line-height: 1; }
+.bt { display: inline-grid; place-items: center; width: 20px; height: 28px; border: 1.5px solid var(--rule); border-radius: 2px; background: var(--card); font-family: var(--mono); font-size: 14px; }
+.bt.flag { background: color-mix(in srgb, var(--blue) 20%, var(--card)); border-color: var(--blue); color: var(--blue); }
+.bt.stuff { background: color-mix(in srgb, var(--red) 20%, var(--card)); border-color: var(--red); color: var(--red); font-weight: 700; }
+.bt.rm { text-decoration: line-through; opacity: 0.7; }
+.bt.ok { border-color: var(--green); }
+.bt.bad { border: 2px dashed var(--red); color: var(--red); }
+.bitrow .gap { width: 8px; }
+.bytegrid { display: grid; gap: 10px; }
+.by8 { display: inline-grid; place-items: center; min-width: 44px; padding: 2px 5px; border: 2px solid var(--ink-2); border-radius: 3px; background: var(--card); font-family: var(--mono); font-size: 14px; font-weight: 600; line-height: 1.2; }
+.by8 small { font-size: 10.5px; font-weight: 400; color: var(--mute); }
+.by8.ctl { color: var(--blue); }
+.by8.delim { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, var(--card)); }
+.by8.esc { border-color: var(--red); background: color-mix(in srgb, var(--red) 16%, var(--card)); color: var(--red); }
+.by8.ok { border-color: var(--green); }
+.by8.bad { border: 2px dashed var(--red); color: var(--red); }
+.by8.done { opacity: 0.4; }
+.by8.cur { border-color: var(--app); box-shadow: 0 0 0 3px color-mix(in srgb, var(--app) 40%, transparent); }
+.lay { display: grid; grid-template-columns: repeat(22, minmax(0, 1fr)); gap: 3px; }
+.lc { display: grid; place-items: center; aspect-ratio: 1 / 1.15; border: 2px solid var(--c); border-radius: 2px; font-family: var(--mono); font-size: 12px; font-weight: 600;
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 22%, transparent) 0 2px, transparent 2px 6px), var(--card); line-height: 1; }
+.lc small { font-size: 9px; font-weight: 400; color: var(--mute); }
+.lc.pad { border-style: dashed; color: var(--red); background: var(--card); }
+.lc.dle { box-shadow: 0 0 0 3px var(--red); }
+@media (max-width: 760px) {
+  .lay { grid-template-columns: repeat(11, minmax(0, 1fr)); }
+  .bitrow .lbl, .byterow .lbl { width: 100%; }
+}
+
+/* laboratorul 3 */
+button.bt { padding: 0; font-family: var(--mono); font-size: 14px; color: var(--ink); cursor: pointer; }
+button.bt:hover { border-color: var(--ink); }
+.sdkwrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; }
+.sdkcol { display: grid; gap: 8px; align-content: start; }
+.sdkcol .lbl { font-family: var(--hand); font-size: 26px; font-weight: 700; line-height: 1; }
+.sdk { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); width: 100%; max-width: 380px; border: 3px solid var(--ink); background: var(--card); }
+.sc { aspect-ratio: 1; display: grid; place-items: center; font-family: var(--mono); font-size: 16px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); color: var(--ink-2); }
+.sc:nth-child(9n) { border-right: 0; }
+.sc:nth-last-child(-n + 9) { border-bottom: 0; }
+.sc.br { border-right: 2px solid var(--ink); }
+.sc.bb { border-bottom: 2px solid var(--ink); }
+.sc.lost { color: var(--red); font-weight: 700; background: color-mix(in srgb, var(--red) 10%, var(--card)); }
+.sc.gone { color: var(--red); font-weight: 700; background: color-mix(in srgb, var(--red) 18%, var(--card)); }
+.sc.rec { color: var(--green); font-weight: 700; background: color-mix(in srgb, var(--green) 16%, var(--card)); }
+.xdiv { font-family: var(--mono); font-size: 16px; line-height: 1.45; background: var(--card); border: 2px solid var(--ink); border-radius: 3px; padding: 12px 16px; overflow-x: auto; white-space: pre; box-shadow: 4px 4px 0 var(--ink); }
+html[data-theme="dark"] .xdiv { box-shadow: 4px 4px 0 #3A4352; }
+.xdiv .lbl2 { font-family: var(--body); font-size: 14px; color: var(--mute); }
+.xdiv .g { color: var(--blue); font-weight: 600; }
+.xdiv .z { color: var(--mute); opacity: 0.6; }
+.xdiv .z0 { color: var(--ink-2); }
+.xdiv .x { background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.xdiv .r { color: var(--app); font-weight: 700; background: color-mix(in srgb, var(--app) 18%, transparent); }
+.mbar { display: inline-block; vertical-align: middle; width: 140px; height: 10px; border: 1.5px solid var(--rule); border-radius: 2px; margin-left: 8px; overflow: hidden; }
+.mbar i { display: block; height: 100%; }
+@media (max-width: 760px) { .sdkwrap { grid-template-columns: minmax(0, 1fr); } }
+
+</style>
+</head>
+<body>
+
+<div class="top">
+  <b>PCom · Laborator 3 <span class="lab-title">Detectarea erorilor: checksum și CRC</span></b>
+  <button type="button" class="theme-btn" id="themeBtn" aria-pressed="false">☾ mod întunecat</button>
+  <nav aria-label="Table">
+    <a href="#b1" title="Titlu">1</a><a href="#b2" title="Erori de transmisie">2</a><a href="#b3" title="Redundanță">3</a>
+    <a href="#b4" title="Checksum">4</a><a href="#b5" title="CRC: ideea">5</a><a href="#b6" title="Împărțirea XOR">6</a>
+    <a href="#b7" title="CRC-32 în C">7</a><a href="#b8" title="Endianness">8</a><a href="#b9" title="Protocolul din laborator">9</a>
+    <a href="#b10" title="ACK și NACK">10</a><a href="#b11" title="Capcane">11</a><a href="#b12" title="Exerciții">12</a>
+  </nav>
+</div>
+
+<div class="wrap">
+
+  <!-- 01 -->
+  <section class="board hero" id="b1">
+    <span class="no">PCom · anul 2 · laboratorul 3</span>
+    <h1>A ajuns bine cadrul?</h1>
+    <span class="sub">detectarea erorilor: checksum, CRC, retransmisie</span>
+    <div class="fig"><svg id="dHero" viewBox="0 0 760 160" aria-hidden="true"></svg></div>
+    <div class="tags"><span>redundanță</span><span>checksum</span><span>CRC-32</span><span>htonl · ntohl</span><span>ACK · NACK</span></div>
+  </section>
+
+  <!-- 02 -->
+  <section class="board" id="b2">
+    <div class="board-head"><span class="no">02</span><h2>Firul nu e <u>perfect</u></h2></div>
+    <p class="cap">Erorile apar ca biți care își schimbă valoarea într-un cadru. Trimiți <code>11111111</code> pe un cablu și primești <code>11111110</code>: o interferență electromagnetică a inversat ultimul bit. La nivelul legătură de date, cadrele pot fi <b>corupte</b>, pot fi <b>pierdute</b>, sau pot apărea cadre la care nu te aștepți.</p>
+    <div class="row2">
+      <div class="trap">
+        <h3 class="mini" style="margin:0">1. <u>detectare</u> + retransmisie</h3>
+        <p class="cap">Receptorul își dă seama că a primit un cadru stricat și cere să i se trimită din nou. Exemple: checksum, CRC. Ethernet are un câmp CRC.</p>
+      </div>
+      <div class="trap">
+        <h3 class="mini" style="margin:0">2. <u>corectare</u></h3>
+        <p class="cap">Emițătorul trimite destulă informație în plus încât receptorul să repare singur cadrul. Exemplu: coduri Hamming.</p>
+      </div>
+    </div>
+    <p class="cap">Ce alegi e o decizie de proiectare a protocolului. Retransmisia costă cel puțin un drum dus-întors în plus. Alege legătura:</p>
+    <div class="ctrls"><div class="seg" role="group" aria-label="Legătura" id="latSeg"></div></div>
+    <div class="fig"><svg id="dLat" viewBox="0 0 760 270" role="img" aria-label="Cadrul stricat, NACK-ul și retransmisia, pe o axă a timpului"></svg></div>
+  </section>
+
+  <!-- 03 -->
+  <section class="board" id="b3">
+    <div class="board-head"><span class="no">03</span><h2><u>Redundanța</u> nu e risipă</h2></div>
+    <p class="cap">Redundanță înseamnă informație repetată. De obicei sună a „în plus”, dar în comunicații e exact ce face posibile detectarea și corectarea erorilor. Exemplul din laborator: <b>Sudoku</b>. Într-o grilă completă, multe cifre se pot deduce din reguli (fiecare cifră o dată pe rând, pe coloană și în fiecare pătrat 3×3). Dacă cineva îți dictează grila la telefon și nu auzi unele cifre, le poți reconstrui. Cu 81 de cifre fără nicio regulă, o cifră neauzită e pierdută.</p>
+    <div class="ctrls">
+      <label class="ctl" for="sdkK">cifre neauzite <output id="sdkKo">30</output><input type="range" id="sdkK" min="1" max="60" value="30"></label>
+      <button class="btn" type="button" id="sdkGo">▶ reconstruiește</button>
+      <button class="btn ghost" type="button" id="sdkNew">altă grilă</button>
+    </div>
+    <div class="sdkwrap">
+      <div class="sdkcol"><span class="lbl">Sudoku: cu reguli</span><div class="sdk" id="sdkA"></div><span class="stat" id="sdkStatA"></span></div>
+      <div class="sdkcol"><span class="lbl">81 de cifre oarecare</span><div class="sdk" id="sdkB"></div><span class="stat" id="sdkStatB"></span></div>
+    </div>
+    <p class="note"><b>Atenție:</b> nu poți scoate cifre la întâmplare și să rămână o singură soluție. Sunt necesare minimum 17 cifre date pentru o soluție unică, dar există și grile cu 77 de cifre care au mai multe soluții. Redundanța unui Sudoku e greu de analizat; metodele din laborator sunt mult mai simple. Aici reconstruim doar cu deducții simple („o singură cifră posibilă aici”), deci uneori rămân și în stânga câteva „?”.</p>
+  </section>
+
+  <!-- 04 -->
+  <section class="board" id="b4">
+    <div class="board-head"><span class="no">04</span><h2>Sume de <u>control</u></h2></div>
+    <p class="cap">Emițătorul adaugă în cadru un câmp <b>checksum</b>: rezultatul unei funcții aplicate pe conținutul cadrului. Receptorul recalculează funcția pe ce a primit; dacă rezultatul diferă de câmpul primit, cadrul e corupt. Cel mai simplu exemplu: suma tuturor octeților, modulo 256.</p>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>checksum simplu</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+
+uint8_t compute_checksum(const char *buff,
+                         size_t count)
+{
+    uint32_t sum = 0;
+
+    for (size_t i = 0; i &lt; count; i++)
+        sum += (uint8_t)buff[i];  /* cast: fără el, octeții
+                                     peste 127 ar fi negativi */
+    return sum % 256;
+}</code></pre>
+      </div>
+      <div style="display:grid; gap:14px; align-content:start">
+        <label class="ctl" for="ckTx">emițătorul trimite (octeți în zecimal)<input type="text" id="ckTx" value="6 23 4" autocomplete="off" spellcheck="false" style="width:100%"></label>
+        <label class="ctl" for="ckRx">receptorul primește<input type="text" id="ckRx" value="8 20 5" autocomplete="off" spellcheck="false" style="width:100%"></label>
+        <div class="fdbtns">
+          <button class="btn ghost" type="button" id="ckSame">fără erori</button>
+          <button class="btn" type="button" id="ckFlip">inversează un bit</button>
+          <button class="btn ghost" type="button" id="ckEx">exemplul din laborator</button>
+        </div>
+      </div>
+    </div>
+    <div class="bytegrid" id="ckRows"></div>
+    <span class="stat" id="ckStat"></span>
+    <p class="note"><b>Coliziune:</b> în exemplul din laborator, <code>6 + 23 + 4 = 33</code> și <code>8 + 20 + 5 = 33</code>. Conținutul s-a schimbat, checksum-ul nu, deci eroarea trece neobservată. Cu modulo 256, o eroare oarecare are în jur de 1 șansă din 256 să treacă. După ce detectează eroarea, de obicei un protocol de mai sus retransmite datele (de exemplu TCP). „Checksum” însemna inițial algoritmi bazați pe sume; azi numele acoperă și algoritmi mai sofisticați, ca CRC.</p>
+  </section>
+
+  <!-- 05 -->
+  <section class="board" id="b5">
+    <div class="board-head"><span class="no">05</span><h2>CRC: <u>restul</u> unei împărțiri</h2></div>
+    <p class="cap">Emițătorul și receptorul se înțeleg asupra unui <b>împărțitor</b> fix. Emițătorul împarte datele la el și pune <b>restul</b> în antet; receptorul face aceeași împărțire și compară resturile. Cu numere obișnuite: <code>1234 = 7 × 176 + 2</code>, deci trimiți <code>1234</code> și restul <code>2</code>.</p>
+    <p class="cap">În practică, datele sunt un <b>polinom cu coeficienți 0 sau 1</b> (peste GF(2)): bitul de pe poziția <i>k</i> e coeficientul lui <i>x<sup>k</sup></i>. Adunarea e XOR, deci nu există transport și totul rămâne binar.</p>
+    <div class="ctrls"><label class="ctl" for="polyIn">text (max 4 caractere)<input type="text" id="polyIn" value="Hi!" maxlength="4" autocomplete="off" spellcheck="false"></label></div>
+    <div class="bitgroups" id="polyBits"></div>
+    <div class="formula"><span id="polyOut"></span><small>fiecare 1 devine un termen; fiecare 0 dispare</small></div>
+    <p class="note"><b>CRC-32</b> folosește polinomul generator x<sup>32</sup> + x<sup>26</sup> + x<sup>23</sup> + x<sup>22</sup> + x<sup>16</sup> + x<sup>12</sup> + x<sup>11</sup> + x<sup>10</sup> + x<sup>8</sup> + x<sup>7</sup> + x<sup>5</sup> + x<sup>4</sup> + x<sup>2</sup> + x + 1, ales pentru că se descurcă bine cu erorile în rafală (mai mulți biți stricați unul lângă altul). Polinoame diferite dau variante diferite de CRC.</p>
+  </section>
+
+  <!-- 06 -->
+  <section class="board" id="b6">
+    <div class="board-head"><span class="no">06</span><h2>Împărțirea cu <u>XOR</u></h2></div>
+    <p class="cap">Exemplul din laborator: datele <code>1101011011</code>, împărțitorul (generatorul) <code>10011</code>. Generatorul are gradul 4, așa că adăugăm 4 zerouri la date, apoi, de fiecare dată când primul bit rămas e 1, facem XOR cu generatorul. Ce rămâne în ultimii 4 biți e CRC-ul.</p>
+    <div class="ctrls">
+      <label class="ctl" for="xdD">datele<input type="text" id="xdD" value="1101011011" maxlength="24" autocomplete="off" spellcheck="false" style="width:240px"></label>
+      <label class="ctl" for="xdG">generatorul<input type="text" id="xdG" value="10011" maxlength="9" autocomplete="off" spellcheck="false" style="width:120px"></label>
+      <button class="btn" type="button" id="xdStep">▶ pas</button>
+      <button class="btn ghost" type="button" id="xdAll">toți pașii</button>
+      <button class="btn ghost" type="button" id="xdReset">de la capăt</button>
+    </div>
+    <div class="xdiv" id="xdOut"></div>
+    <span class="stat" id="xdStat"></span>
+    <h3 class="mini">La <u>receptor</u></h3>
+    <p class="cap">Se trimit datele urmate de CRC. Receptorul împarte tot ce a primit la același generator: dacă restul e 0, cadrul e bun. Apasă pe un bit ca să-l inversezi.</p>
+    <div class="bitrow" id="xdRx"></div>
+    <span class="stat" id="xdRxStat"></span>
+  </section>
+
+  <!-- 07 -->
+  <section class="board" id="b7">
+    <div class="board-head"><span class="no">07</span><h2>CRC-32 în <u>C</u></h2></div>
+    <div style="display:grid; gap:24px">
+      <div class="code">
+        <div class="bar"><span>crc32.c</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+
+/* polinomul CRC-32, cu biții în ordine inversă */
+#define POLY 0xEDB88320
+
+uint32_t compute_crc32(const char *buffer, size_t len)
+{
+    uint32_t crc = ~0u;              /* 0xFFFFFFFF, prin convenție */
+
+    for (size_t i = 0; i &lt; len; i++) {
+        crc ^= (uint8_t)buffer[i];   /* un octet intră în registru */
+        for (int bit = 0; bit &lt; 8; bit++) {
+            if (crc &amp; 1)              /* „primul” bit e 1: XOR */
+                crc = (crc &gt;&gt; 1) ^ POLY;
+            else
+                crc &gt;&gt;= 1;
+        }
+    }
+    return ~crc;                     /* inversăm biții la final */
+}</code></pre>
+      </div>
+      <div style="display:grid; gap:14px; align-content:start">
+        <p class="cap"><code>0xEDB88320</code> e polinomul de pe tabla 5 scris cu biții în ordine inversă (fără termenul x<sup>32</sup>, pentru că păstrăm doar 32 de biți). De aceea registrul se mută la <b>dreapta</b>: bitul „cel mai din față” e bitul cel mai puțin semnificativ. Codul e scris ca să fie clar, nu rapid: procesează câte un bit.</p>
+        <label class="ctl" for="crcIn">calculează pentru textul<input type="text" id="crcIn" value="123456789" autocomplete="off" spellcheck="false" style="width:100%"></label>
+        <div class="tbl"><table class="cmds" id="crcOut"></table></div>
+        <p class="note"><b>Valoarea de verificare:</b> CRC-32 pentru <code>"123456789"</code> trebuie să fie <code>0xCBF43926</code>. Testează-ți implementarea cu ea.</p>
+      </div>
+    </div>
+    <h3 class="mini">Checksum vs. CRC-32: <u>experiment</u></h3>
+    <p class="cap">Trimitem 20.000 de cadre aleatoare de câte 64 de octeți, stricăm fiecare cadru și numărăm câte erori <b>nu</b> sunt detectate.</p>
+    <div class="ctrls"><button class="btn" type="button" id="expGo">▶ rulează din nou</button><span class="cap" id="expNote"></span></div>
+    <div class="tbl"><table class="cmds plain" id="expOut"></table></div>
+  </section>
+
+  <!-- 08 -->
+  <section class="board" id="b8">
+    <div class="board-head"><span class="no">08</span><h2><u>Endianness</u></h2></div>
+    <p class="cap">Endianness e ordinea în care octeții unei valori stau în memorie. <b>Big endian</b>: octetul cel mai semnificativ primul, cum scrii numerele pe hârtie. <b>Little endian</b>: invers. Contează doar pentru valori de 2 sau mai mulți octeți. Rețeaua leagă mașini diferite, deci are nevoie de un standard: <b>network byte order</b> e big endian. Procesoarele moderne sunt, în general, little endian (<b>host byte order</b>).</p>
+    <div class="ctrls"><label class="ctl" for="enIn">un uint32_t, în hex<input type="text" id="enIn" value="01020304" maxlength="8" autocomplete="off" spellcheck="false" style="width:140px"></label></div>
+    <div class="bytegrid" id="enOut"></div>
+    <span class="stat" id="enStat"></span>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>&lt;arpa/inet.h&gt;</span><button type="button" data-copy>Copiază</button></div>
+        <pre><code class="language-c">uint32_t htonl(uint32_t hostlong);  /* host → rețea */
+uint16_t htons(uint16_t hostshort); /* host → rețea */
+uint32_t ntohl(uint32_t netlong);   /* rețea → host */
+uint16_t ntohs(uint16_t netshort);  /* rețea → host */</code></pre>
+      </div>
+      <p class="note"><b>Regula:</b> gândește în termeni de „ordinea host” și „ordinea rețea” și apelează mereu funcțiile când o valoare trece între ele. Pe o mașină big endian nu fac nimic, dar codul rămâne <b>portabil</b>. Ai mai folosit una: <code>htons(5000)</code> la socket-ul UDP din laboratorul 1.</p>
+    </div>
+  </section>
+
+  <!-- 09 -->
+  <section class="board" id="b9">
+    <div class="board-head"><span class="no">09</span><h2>Protocolul din <u>laborator</u></h2></div>
+    <p class="cap">Construim peste framing-ul din laboratorul 2: <code>link_send</code> și <code>link_recv</code> se ocupă de delimitatori și de trimiterea cadrului. Protocolul nostru stă în payload-ul lor. MTU-ul e de 1500 de octeți.</p>
+    <div class="fig"><svg id="dNest" viewBox="0 0 760 210" role="img" aria-label="Cadrul din laboratorul 2 (DELIM, PAYLOAD, DELIM) conține cadrul din laboratorul 3 (LEN, CHECKSUM, PAYLOAD)"></svg></div>
+    <div class="row2">
+      <div class="code">
+        <div class="bar"><span>schiță · emițătorul (numele exacte sunt în common.h)</span></div>
+        <pre><code class="language-c">/* completăm payload-ul și lungimea */
+memcpy(frame.payload, date, len);
+frame.len = len;
+
+/* suma de control, în network byte order */
+frame.sum = htonl(compute_crc32(frame.payload, len));
+
+link_send(&amp;frame, sizeof(header) + len);</code></pre>
+      </div>
+      <div class="code">
+        <div class="bar"><span>schiță · receptorul</span></div>
+        <pre><code class="language-c">link_recv(&amp;frame, ...);
+
+uint32_t primit = ntohl(frame.sum);
+uint32_t calculat = compute_crc32(frame.payload, frame.len);
+
+if (primit != calculat)
+    printf("Frame corrupted\n");</code></pre>
+      </div>
+    </div>
+    <div class="tbl">
+      <table class="cmds">
+        <tr><td>CORRUPTION</td><td>în <code>run_experiment.sh</code>: cât de des strică legătura cadrele</td></tr>
+        <tr><td>stack smash</td><td>payload prea mare: maximum <code>MAX_LEN - sizeof(header)</code> (<code>MAX_LEN</code> e în <code>lib.h</code> din emulator)</td></tr>
+        <tr><td>git pull</td><td>scheletul e în folderul <code>lab3</code>; README-ul descrie ce funcții aveți</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="board" id="b10">
+    <div class="board-head"><span class="no">10</span><h2><u>ACK</u> sau <u>NACK</u>?</h2></div>
+    <p class="cap">Retransmisia simplă: emițătorul trimite un cadru și așteaptă răspunsul. Receptorul răspunde cu <b>NACK</b> dacă a detectat un cadru corupt, altfel cu <b>ACK</b>. Dar și răspunsul trece prin aceeași legătură, care inversează câte <b>un bit</b> pe cadru. Codificarea trebuie aleasă astfel încât ACK și NACK să se distingă și după un bit inversat.</p>
+    <div class="ctrls">
+      <div class="ctl"><span>codificarea</span><div class="seg" role="group" aria-label="Codificarea" id="anEnc"></div></div>
+      <div class="ctl"><span>receptorul trimite</span><div class="seg" role="group" aria-label="Răspunsul trimis" id="anSent"></div></div>
+    </div>
+    <div class="bitrows" id="anRows"></div>
+    <span class="stat" id="anStat"></span>
+    <p class="note"><b>Distanța Hamming</b> = în câți biți diferă două coduri. Cu distanța 1, un bit inversat transformă un ACK direct în NACK. Cu distanța 2, vezi că s-a stricat ceva, dar nu știi ce era. De la distanța 3 în sus, alegi codul cel mai apropiat și răspunsul e corect chiar după un bit inversat.</p>
+    <h3 class="mini">Stop-and-wait, <u>simulat</u></h3>
+    <div class="ctrls">
+      <label class="ctl" for="swP">probabilitatea ca un cadru să fie corupt <output id="swPo">30%</output><input type="range" id="swP" min="0" max="70" step="5" value="30"></label>
+      <button class="btn" type="button" id="swGo">▶ trimite 5 cadre</button>
+      <span class="stat" id="swStat"></span>
+    </div>
+    <div class="fig"><svg id="dSw" viewBox="0 0 760 300" role="img" aria-label="Cronologia trimiterii a cinci cadre, cu retransmisii după NACK"></svg></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="board" id="b11">
+    <div class="board-head"><span class="no">11</span><h2>Capcane</h2></div>
+    <div class="traps">
+      <div class="trap wide">
+        <h3><span>✗</span> checksum doar pe payload</h3>
+        <p class="cap">Dacă se strică un bit din <code>LEN</code>, receptorul calculează suma pe alt număr de octeți, sau citește peste capătul bufferului. Fie acoperi și antetul cu suma de control, fie verifici că <code>LEN</code> are o valoare posibilă înainte să-l folosești.</p>
+      </div>
+      <div class="trap"><h3><span>✗</span> <code>htonl</code> doar într-o parte</h3><p class="cap">Dacă emițătorul face <code>htonl</code> și receptorul uită <code>ntohl</code> (sau invers), sumele nu se mai potrivesc niciodată, chiar pe aceeași mașină. La fel pentru <code>LEN</code>, dacă are mai mult de un octet (<code>htons</code> / <code>ntohs</code>).</p></div>
+      <div class="trap"><h3><span>✗</span> <code>char</code> cu semn</h3><p class="cap">Fără <code>(uint8_t)</code>, un octet ca <code>0xE9</code> intră în sumă ca -23. Checksum-ul iese altfel decât la colegul care face cast.</p></div>
+      <div class="trap"><h3><span>✗</span> CRC pe <code>sizeof</code>, nu pe <code>len</code></h3><p class="cap">Emițătorul calculează pe 1400 de octeți, receptorul pe cât a primit de fapt. Calculați amândoi pe aceeași lungime.</p></div>
+      <div class="trap"><h3><span>✗</span> ACK = 1, NACK = 0</h3><p class="cap">Distanța Hamming e 1: un singur bit inversat schimbă răspunsul fără să observe nimeni (tabla 10).</p></div>
+      <div class="trap"><h3><span>✗</span> stack smash</h3><p class="cap">Payload-ul nu poate depăși <code>MAX_LEN - sizeof(header)</code>. Trimiteți fișierul pe bucăți.</p></div>
+      <div class="trap"><h3><span>✗</span> CRC greșit, dar „merge”</h3><p class="cap">Dacă ambele capete au aceeași greșeală, verificarea trece. Testați cu <code>"123456789"</code> → <code>0xCBF43926</code>.</p></div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="board" id="b12">
+    <div class="board-head"><span class="no">12</span><h2><u>Exerciții</u></h2></div>
+    <p class="cap">Cadrul vostru, <code>LEN | CHECKSUM | PAYLOAD</code>, e încapsulat în cadrul din laboratorul 2, <code>DELIM | PAYLOAD | DELIM</code>. Scheletul e în folderul <code>lab3</code> din repository-ul public; dacă îl aveți deja, faceți <code>git pull</code>.</p>
+    <div class="code">
+      <div class="bar"><span>schelet</span><button type="button" data-copy>Copiază</button></div>
+      <pre><code class="language-bash">cd pcom-laboratoare-public
+git pull
+cd lab3
+./run_experiment.sh       # CORRUPTION = cât de des se strică un cadru</code></pre>
+    </div>
+    <ol class="exs">
+      <li><b>1</b><h3>Checksum</h3>
+        <ul>
+          <li>implementați în <code>simple_csum</code> algoritmul de pe tabla 4</li>
+          <li>folosiți structura protocolului din <code>common.h</code></li>
+          <li>receptorul afișează <code>Frame corrupted</code> când detectează un cadru corupt</li>
+          <li>câmpul <code>sum</code>: <code>htonl</code> la trimitere, <code>ntohl</code> la primire</li>
+        </ul>
+        <span class="q">Câte cadre corupte vă scapă? De ce?</span>
+      </li>
+      <li><b>2</b><h3>CRC-32</h3>
+        <ul>
+          <li>înlocuiți checksum-ul simplu cu CRC-32 (tabla 7)</li>
+          <li>verificați întâi pe <code>"123456789"</code></li>
+        </ul>
+        <div class="snip">compute_crc32("123456789", 9) == 0xCBF43926</div>
+        <span class="q">Acum mai scapă vreun cadru corupt?</span>
+      </li>
+      <li><b>3</b><h3>Retransmisie simplă</h3>
+        <ul>
+          <li>emițătorul trimite un cadru și așteaptă răspuns</li>
+          <li>receptorul răspunde NACK la cadru corupt, ACK altfel</li>
+          <li>alegeți voi codificarea; pe legătură se inversează un singur bit pe cadru (tabla 10)</li>
+          <li>testați trimițând un fișier pe bucăți care încap în MTU</li>
+        </ul>
+        <span class="q">Ce faceți dacă se strică chiar ACK-ul?</span>
+      </li>
+      <li><b>?</b><h3>V-ați blocat?</h3>
+        <ul>
+          <li><code>*** stack smashing detected ***</code>: payload prea mare</li>
+          <li>toate cadrele par corupte: <code>htonl</code>/<code>ntohl</code> doar într-o parte, sau lungimi diferite</li>
+          <li>CRC diferit de colegi: lipsește <code>~</code> la început sau la sfârșit, sau castul la <code>uint8_t</code></li>
+          <li>altceva: chemați-mă</li>
+        </ul>
+      </li>
+    </ol>
+    <div class="tbl">
+      <table class="cmds">
+        <tr><td>checksum</td><td>suma octeților mod 256 · coliziune cam 1 din 256</td></tr>
+        <tr><td>CRC-32</td><td><code>POLY 0xEDB88320</code> · start <code>~0</code> · final <code>~crc</code> · <code>"123456789"</code> → <code>0xCBF43926</code></td></tr>
+        <tr><td>network order</td><td>big endian · <code>htonl</code> / <code>htons</code> la trimitere, <code>ntohl</code> / <code>ntohs</code> la primire</td></tr>
+        <tr><td>MTU</td><td>1500 de octeți</td></tr>
+      </table>
+    </div>
+    <footer>Sursa: <a href="https://pcom.pages.upb.ro/labs/lab3/lecture.html" target="_blank" rel="noopener">Laboratorul 3 PCom</a> · <a href="https://pcom.pages.upb.ro/labs/lab3/exercises.html" target="_blank" rel="noopener">exercițiile</a> · <a href="https://beta.computer-networking.info/syllabus/default/principles/reliability.html#reliable-data-transfer-on-top-of-an-imperfect-link" target="_blank" rel="noopener">lectura: transfer sigur peste o legătură imperfectă</a></footer>
+  </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  'use strict';
+  if (window.hljs) { try { hljs.highlightAll(); } catch (e) {} }
+
+  const INK = '#24365C', INK2 = '#4F6690', MUTE = '#9AAAC4', BLUE = '#1D5FBF', RED = '#D03A2F', GREEN = '#2E8B3E', ORANGE = '#D9822B', PURPLE = '#7B45B8', FILL = '#E3EDFC';
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const hex = (n, w) => n.toString(16).toUpperCase().padStart(w || 2, '0');
+  const bin8 = (n) => n.toString(2).padStart(8, '0');
+  const pop = (n) => { let c = 0; while (n) { c += n & 1; n >>>= 1; } return c; };
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pen(svg, seed) {
+    const rc = window.rough ? rough.svg(svg) : null;
+    const o = (x) => Object.assign({ roughness: 1.1, bowing: 0.8, strokeWidth: 2, stroke: INK, seed: seed || 3, hachureGap: 5, fillWeight: 1.4 }, x || {});
+    function plain(tag, a, x) {
+      x = o(x);
+      a.stroke = x.stroke; a['stroke-width'] = x.strokeWidth; a.fill = x.fill || 'none';
+      if (x.fill && x.fillStyle !== 'solid') a['fill-opacity'] = 0.28;
+      if (x.strokeLineDash) a['stroke-dasharray'] = x.strokeLineDash.join(' ');
+      return el(tag, a, svg);
+    }
+    const p = {
+      line: (x1, y1, x2, y2, x) => rc ? svg.appendChild(rc.line(x1, y1, x2, y2, o(x))) : plain('line', { x1, y1, x2, y2 }, x),
+      rect: (x0, y0, w, h, x) => rc ? svg.appendChild(rc.rectangle(x0, y0, w, h, o(x))) : plain('rect', { x: x0, y: y0, width: w, height: h }, x),
+      circle: (cx, cy, d, x) => rc ? svg.appendChild(rc.circle(cx, cy, d, o(x))) : plain('circle', { cx, cy, r: d / 2 }, x),
+      poly: (pts, x) => rc ? svg.appendChild(rc.linearPath(pts, o(x))) : plain('polyline', { points: pts.map((q) => q.join(',')).join(' ') }, x),
+      path: (d, x) => rc ? svg.appendChild(rc.path(d, o(x))) : plain('path', { d }, x),
+      text(x, y, s, cls, anchor, fill) {
+        const t = el('text', { x, y, class: cls || 't', 'text-anchor': anchor || 'start' }, svg);
+        if (fill) t.style.fill = fill;
+        t.textContent = s; return t;
+      },
+      arrow(x1, y1, x2, y2, x) {
+        p.line(x1, y1, x2, y2, x);
+        const a = Math.atan2(y2 - y1, x2 - x1), L = 10;
+        p.line(x2, y2, x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45), x);
+        p.line(x2, y2, x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45), x);
+      },
+      clear() { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+    };
+    return p;
+  }
+  function seg(container, items, cur, onPick) {
+    container.innerHTML = '';
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = it.label; b.dataset.v = it.v;
+      b.setAttribute('aria-pressed', String(it.v === cur));
+      b.addEventListener('click', () => {
+        container.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        onPick(it.v);
+      });
+      container.appendChild(b);
+    });
+  }
+  const sup = (n) => String(n).split('').map((d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+d]).join('');
+
+  // CRC-32 cu tabel (aceleași rezultate ca varianta bit cu bit din tabla 7)
+  const CRCT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xEDB88320 : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRCT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  const sum256 = (b) => { let s = 0; for (let i = 0; i < b.length; i++) s += b[i]; return s & 255; };
+  const strB = (s) => Array.from(s, (c) => c.charCodeAt(0) & 255);
+
+  // ---------- 01 hero ----------
+  (function () {
+    const p = pen($('dHero'), 11);
+    const tx = '11111111', rx = '11111110';
+    p.text(20, 52, 'trimis', 'hs'); p.text(20, 128, 'primit', 'hs');
+    for (let i = 0; i < 8; i++) {
+      const x = 130 + i * 44;
+      p.rect(x, 26, 38, 38, { strokeWidth: 1.8 }); p.text(x + 19, 52, tx[i], 'h', 'middle');
+      const bad = tx[i] !== rx[i];
+      p.rect(x, 102, 38, 38, bad ? { stroke: RED, strokeWidth: 3, fill: '#F9D6D3', fillStyle: 'solid' } : { strokeWidth: 1.8 });
+      p.text(x + 19, 128, rx[i], 'h', 'middle', bad ? RED : INK);
+      p.arrow(x + 19, 68, x + 19, 98, { stroke: MUTE, strokeWidth: 1.2 });
+    }
+    // fulger
+    const fx = 130 + 7 * 44 + 60;
+    p.poly([[fx + 40, 20], [fx + 10, 72], [fx + 34, 72], [fx, 130]], { stroke: ORANGE, strokeWidth: 3 });
+    p.text(fx + 50, 84, 'interferență', 'hs', 'start', ORANGE);
+    p.text(fx + 50, 108, 'electromagnetică', 'ts', 'start');
+  })();
+
+  // ---------- 02 latență ----------
+  (function () {
+    const L = [
+      { v: 0, label: 'LAN, 100 m', d: 0.5e-6 },
+      { v: 1, label: 'fibră, 1.000 km', d: 5e-3 },
+      { v: 2, label: 'prin satelit geostaționar', d: 0.24 },
+      { v: 3, label: 'Pământ–Marte', d: 20 * 60 }
+    ];
+    const fT = (s) => s < 1e-3 ? (s * 1e6).toPrecision(2) + ' µs' : s < 1 ? (s * 1e3).toPrecision(3) + ' ms' : s < 120 ? s.toPrecision(3) + ' s' : Math.round(s / 60) + ' min';
+    const svg = $('dLat');
+    function render(k) {
+      const d = L[k].d, p = pen(svg, 7); p.clear();
+      const A = 150, B = 520, y0 = 50;
+      p.text(A, 30, 'emițător', 'hs', 'middle'); p.text(B, 30, 'receptor', 'hs', 'middle');
+      p.line(A, 40, A, 250, { stroke: MUTE, strokeLineDash: [5, 6], strokeWidth: 1.6 });
+      p.line(B, 40, B, 250, { stroke: MUTE, strokeLineDash: [5, 6], strokeWidth: 1.6 });
+      p.arrow(A, y0, B, y0 + 55, { stroke: RED, strokeWidth: 2 });
+      p.text((A + B) / 2, y0 + 8, 'cadru (un bit stricat)', 't', 'middle', RED);
+      p.text(B + 14, y0 + 60, '✗ detectat după ' + fT(d), 'ms', 'start', RED);
+      p.arrow(B, y0 + 70, A, y0 + 125, { stroke: ORANGE, strokeWidth: 2 });
+      p.text((A + B) / 2, y0 + 82, 'NACK', 't', 'middle', ORANGE);
+      p.arrow(A, y0 + 135, B, y0 + 190, { stroke: GREEN, strokeWidth: 2 });
+      p.text((A + B) / 2, y0 + 145, 'același cadru, din nou', 't', 'middle', GREEN);
+      p.text(B + 14, y0 + 195, '✓ bun după ≈ ' + fT(3 * d), 'ms', 'start', GREEN);
+      p.text(20, 258, `cu corectare de erori: bun după ${fT(d)}, fără drumul dus-întors în plus`, 'ts', 'start', BLUE);
+    }
+    seg($('latSeg'), L, 0, render);
+    render(0);
+  })();
+
+  // ---------- 03 sudoku ----------
+  (function () {
+    let seed = 12345;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    let sol, rnd, holes, timer = 0;
+    function make() {
+      const pat = (r, c) => ((r % 3) * 3 + Math.floor(r / 3) + c) % 9;
+      const rows = [].concat(...shuf([0, 1, 2]).map((b) => shuf([0, 1, 2]).map((r) => b * 3 + r)));
+      const cols = [].concat(...shuf([0, 1, 2]).map((b) => shuf([0, 1, 2]).map((c) => b * 3 + c)));
+      const nums = shuf([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      sol = rows.map((r) => cols.map((c) => nums[pat(r, c)]));
+      rnd = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => 1 + Math.floor(rng() * 9)));
+    }
+    function pickHoles() {
+      const k = +$('sdkK').value; $('sdkKo').textContent = k;
+      holes = new Set(shuf([...Array(81).keys()]).slice(0, k));
+    }
+    function cellsHTML(g, state) {
+      let h = '';
+      for (let i = 0; i < 81; i++) {
+        const r = Math.floor(i / 9), c = i % 9, st = state[i];
+        const cls = ['sc', c % 3 === 2 && c < 8 ? 'br' : '', r % 3 === 2 && r < 8 ? 'bb' : '', st === 'lost' ? 'lost' : st === 'rec' ? 'rec' : st === 'gone' ? 'gone' : ''].join(' ');
+        h += `<div class="${cls}">${st === 'lost' || st === 'gone' ? '?' : g[r][c]}</div>`;
+      }
+      return h;
+    }
+    function show(stateA, stateB) {
+      $('sdkA').innerHTML = cellsHTML(sol, stateA);
+      $('sdkB').innerHTML = cellsHTML(rnd, stateB);
+    }
+    function reset() {
+      clearTimeout(timer);
+      const st = Array(81).fill(''); holes.forEach((i) => { st[i] = 'lost'; });
+      show(st, st.slice());
+      $('sdkStatA').className = 'stat info'; $('sdkStatA').textContent = `${holes.size} cifre neauzite`;
+      $('sdkStatB').className = 'stat info'; $('sdkStatB').textContent = `${holes.size} cifre neauzite`;
+    }
+    function solveOrder() {
+      const g = sol.map((r) => r.slice()); holes.forEach((i) => { g[Math.floor(i / 9)][i % 9] = 0; });
+      const order = [];
+      const cand = (r, c) => {
+        const s = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        for (let k = 0; k < 9; k++) { s.delete(g[r][k]); s.delete(g[k][c]); }
+        const br = r - r % 3, bc = c - c % 3;
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s.delete(g[br + i][bc + j]);
+        return s;
+      };
+      let prog = true;
+      while (prog) {
+        prog = false;
+        for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) {
+          if (g[r][c]) continue;
+          const s = cand(r, c);
+          if (s.size === 1) { g[r][c] = [...s][0]; order.push(r * 9 + c); prog = true; }
+        }
+        if (prog) continue;
+        // „singura celulă din rând/coloană/pătrat unde poate sta cifra d”
+        const units = [];
+        for (let k = 0; k < 9; k++) {
+          units.push([...Array(9).keys()].map((j) => [k, j]));
+          units.push([...Array(9).keys()].map((j) => [j, k]));
+          units.push([...Array(9).keys()].map((j) => [Math.floor(k / 3) * 3 + Math.floor(j / 3), (k % 3) * 3 + (j % 3)]));
+        }
+        for (const u of units) {
+          for (let d = 1; d <= 9 && !prog; d++) {
+            if (u.some(([r, c]) => g[r][c] === d)) continue;
+            const spots = u.filter(([r, c]) => !g[r][c] && cand(r, c).has(d));
+            if (spots.length === 1) { const [r, c] = spots[0]; g[r][c] = d; order.push(r * 9 + c); prog = true; }
+          }
+          if (prog) break;
+        }
+      }
+      return order;
+    }
+    function rebuild() {
+      reset();
+      const order = solveOrder();
+      const stA = Array(81).fill(''); holes.forEach((i) => { stA[i] = 'lost'; });
+      const stB = stA.map((s) => (s ? 'gone' : ''));
+      let k = 0;
+      (function tick() {
+        if (k < order.length) { stA[order[k++]] = 'rec'; show(stA, stB); timer = setTimeout(tick, Math.max(12, 600 / order.length)); return; }
+        show(stA, stB);
+        const left = holes.size - order.length;
+        $('sdkStatA').className = 'stat ' + (left ? 'info' : 'ok');
+        $('sdkStatA').textContent = left ? `${order.length} recuperate, ${left} rămân (ar trebui încercări)` : `toate ${holes.size} recuperate din reguli`;
+        $('sdkStatB').className = 'stat ko'; $('sdkStatB').textContent = `${holes.size} pierdute definitiv`;
+      })();
+    }
+    $('sdkK').addEventListener('input', () => { pickHoles(); reset(); });
+    $('sdkNew').addEventListener('click', () => { make(); pickHoles(); reset(); });
+    $('sdkGo').addEventListener('click', rebuild);
+    make(); pickHoles(); reset();
+  })();
+
+  // ---------- 04 checksum ----------
+  (function () {
+    const tx = $('ckTx'), rx = $('ckRx');
+    const parse = (s) => s.split(/[\s,;]+/).filter(Boolean).map((t) => Math.max(0, Math.min(255, parseInt(t, 10) || 0))).slice(0, 12);
+    function row(lbl, bytes, sum, cls) {
+      return `<div class="byterow"><span class="lbl">${lbl}</span>${bytes.map((b, i) => `<span class="by8 ${cls ? cls(i) : ''}">${b}<small>${bin8(b)}</small></span>`).join('')}<span class="by8 delim">${sum}<small>checksum</small></span></div>`;
+    }
+    function render() {
+      const a = parse(tx.value), b = parse(rx.value);
+      const sa = sum256(a), sb = sum256(b);
+      const total = (x) => x.reduce((s, v) => s + v, 0);
+      $('ckRows').innerHTML = row('emițătorul', a, sa) + row('receptorul', b, sa, (i) => (b[i] === a[i] ? '' : 'esc')) +
+        `<div class="byterow"><span class="lbl">recalculat</span><span class="cap">${b.join(' + ') || '0'} = ${total(b)}, mod 256 = <b>${sb}</b>, iar în cadru scrie <b>${sa}</b></span></div>`;
+      const same = a.length === b.length && a.every((v, i) => v === b[i]);
+      const st = $('ckStat');
+      if (same) { st.className = 'stat ok'; st.textContent = 'cadru corect: sumele coincid'; }
+      else if (sa === sb) { st.className = 'stat ko'; st.textContent = 'eroare NEDETECTATĂ: datele diferă, dar suma iese la fel'; }
+      else { st.className = 'stat ok'; st.textContent = `eroare detectată: ${sb} ≠ ${sa}, receptorul afișează „Frame corrupted”`; }
+    }
+    tx.addEventListener('input', render); rx.addEventListener('input', render);
+    $('ckSame').addEventListener('click', () => { rx.value = parse(tx.value).join(' '); render(); });
+    $('ckFlip').addEventListener('click', () => {
+      const b = parse(tx.value); if (!b.length) return;
+      const i = Math.floor(Math.random() * b.length), k = Math.floor(Math.random() * 8);
+      b[i] ^= 1 << k; rx.value = b.join(' '); render();
+    });
+    $('ckEx').addEventListener('click', () => { tx.value = '6 23 4'; rx.value = '8 20 5'; render(); });
+    render();
+  })();
+
+  // ---------- 05 polinom ----------
+  (function () {
+    const inp = $('polyIn');
+    function render() {
+      const s = inp.value.replace(/[^\x20-\x7E]/g, '').slice(0, 4) || ' ';
+      const bits = strB(s).map(bin8).join('');
+      const n = bits.length;
+      $('polyBits').innerHTML = strB(s).map((b, k) => `<div class="bg" style="--c:${k % 2 ? ORANGE : BLUE}"><div>${[...bin8(b)].map((c, j) => `<span class="bt ${c === '1' ? 'flag' : ''}" title="x^${n - 1 - (k * 8 + j)}">${c}</span>`).join('')}</div><small>'${esc(s[k])}' · x${sup(n - 1 - k * 8)} … x${sup(n - 8 - k * 8)}</small></div>`).join('');
+      const terms = [];
+      [...bits].forEach((c, i) => { if (c === '1') { const e = n - 1 - i; terms.push(e === 0 ? '1' : e === 1 ? 'x' : 'x' + sup(e)); } });
+      $('polyOut').textContent = terms.join(' + ') || '0';
+    }
+    inp.addEventListener('input', render); render();
+  })();
+
+  // ---------- 06 împărțirea XOR ----------
+  (function () {
+    const dIn = $('xdD'), gIn = $('xdG');
+    let steps = [], shown = 0, rxBits = [], D = '', G = '', R = '';
+    function divide(m, g) {
+      // întoarce lista registrelor și pozițiile XOR
+      const a = m.split('').map(Number), gb = g.split('').map(Number), out = [];
+      const limit = m.length - g.length + 1;
+      out.push({ reg: a.join(''), at: -1 });
+      for (let i = 0; i < limit; i++) {
+        if (a[i] === 1) { for (let j = 0; j < gb.length; j++) a[i + j] ^= gb[j]; out.push({ reg: a.join(''), at: i }); }
+      }
+      return out;
+    }
+    function setup() {
+      D = dIn.value.replace(/[^01]/g, ''); G = gIn.value.replace(/[^01]/g, '').replace(/^0+/, '');
+      if (dIn.value !== D) dIn.value = D;
+      if (!D || G.length < 2) { $('xdOut').innerHTML = '<span class="cap">datele și un generator de cel puțin 2 biți, care începe cu 1</span>'; $('xdRx').innerHTML = ''; $('xdStat').textContent = ''; $('xdRxStat').textContent = ''; return false; }
+      const r = G.length - 1;
+      steps = divide(D + '0'.repeat(r), G);
+      R = steps[steps.length - 1].reg.slice(-r);
+      rxBits = (D + R).split('');
+      shown = 0;
+      return true;
+    }
+    function render() {
+      const r = G.length - 1, n = D.length + r;
+      let h = `<span class="lbl2">date + ${r} zerouri, împărțite la ${G}</span>\n`;
+      for (let k = 0; k <= shown && k < steps.length; k++) {
+        const st = steps[k], prev = k ? steps[k - 1].reg : null;
+        if (k) {
+          // generatorul aliniat sub primul 1
+          h += ' '.repeat(st.at) + `<span class="g">${G}</span>` + ' '.repeat(n - st.at - G.length) + `   ⊕ la poziția ${st.at}\n`;
+          h += ' '.repeat(st.at) + '─'.repeat(G.length) + '\n';
+        }
+        const lead = st.reg.indexOf('1');
+        const isLast = k === steps.length - 1 && k === shown;
+        h += [...st.reg].map((c, i) => {
+          if (i >= n - r && isLast) return `<span class="r">${c}</span>`;
+          if (i >= n - r) return `<span class="z0">${c}</span>`;
+          if (lead === -1 || i < lead) return `<span class="z">${c}</span>`;
+          if (prev && i >= st.at && i < st.at + G.length) return `<span class="x">${c}</span>`;
+          return c;
+        }).join('') + '\n';
+      }
+      $('xdOut').innerHTML = h;
+      const done = shown >= steps.length - 1;
+      const st = $('xdStat');
+      if (done) { st.className = 'stat ok'; st.textContent = `restul (CRC-ul) = ${R}  ·  se trimite ${D} ${R}`; }
+      else { st.className = 'stat info'; st.textContent = `pasul ${shown} din ${steps.length - 1}`; }
+      $('xdStep').disabled = $('xdAll').disabled = done;
+      renderRx();
+    }
+    function renderRx() {
+      const tx = (D + R).split('');
+      const rem = divide(rxBits.join(''), G);
+      const rr = rem[rem.length - 1].reg.slice(-(G.length - 1));
+      $('xdRx').innerHTML = '<span class="lbl">primit</span>' + rxBits.map((c, i) => `<button type="button" class="bt ${i >= D.length ? 'flag' : ''} ${c !== tx[i] ? 'stuff' : ''}" data-i="${i}" aria-label="bitul ${i}">${c}</button>`).join('');
+      const changed = rxBits.some((c, i) => c !== tx[i]);
+      const st = $('xdRxStat');
+      if (/^0+$/.test(rr)) { st.className = 'stat ' + (changed ? 'ko' : 'ok'); st.textContent = changed ? `rest ${rr}: eroare NEDETECTATĂ (s-a nimerit un multiplu de ${G})` : `rest ${rr}: cadru bun`; }
+      else { st.className = 'stat ok'; st.textContent = `rest ${rr} ≠ 0: eroare detectată`; }
+    }
+    $('xdRx').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-i]'); if (!b) return;
+      const i = +b.dataset.i; rxBits[i] = rxBits[i] === '1' ? '0' : '1'; renderRx();
+      $('xdRx').querySelector(`[data-i="${i}"]`)?.focus();
+    });
+    $('xdStep').addEventListener('click', () => { if (shown < steps.length - 1) { shown++; render(); } });
+    $('xdAll').addEventListener('click', () => { shown = steps.length - 1; render(); });
+    $('xdReset').addEventListener('click', () => { if (setup()) render(); });
+    [dIn, gIn].forEach((x) => x.addEventListener('input', () => { if (setup()) render(); }));
+    if (setup()) render();
+  })();
+
+  // ---------- 07 CRC-32 live + experiment ----------
+  (function () {
+    const inp = $('crcIn');
+    function render() {
+      const b = strB(inp.value), c = crc32(b);
+      $('crcOut').innerHTML = `<tr><td>CRC-32</td><td><code>0x${hex(c, 8)}</code>${inp.value === '123456789' ? ' ✓' : ''}</td></tr><tr><td>checksum</td><td><code>${sum256(b)}</code> (suma mod 256)</td></tr><tr><td>lungime</td><td>${b.length} octeți</td></tr>`;
+    }
+    inp.addEventListener('input', render); render();
+
+    const KINDS = [
+      { n: 'un bit inversat', f: 1 },
+      { n: 'doi biți inversați', f: 2 },
+      { n: 'rafală de 16 biți', f: 16, burst: true },
+      { n: 'rafală de 40 de biți', f: 40, burst: true }
+    ];
+    function run() {
+      const N = 20000, L = 64, a = new Uint8Array(L), b = new Uint8Array(L);
+      const flip = (k) => { b[k >> 3] ^= 1 << (7 - (k & 7)); };
+      const rows = KINDS.map((K) => {
+        let mS = 0, mC = 0;
+        for (let n = 0; n < N; n++) {
+          for (let i = 0; i < L; i++) a[i] = (Math.random() * 256) | 0;
+          b.set(a);
+          if (!K.burst) {
+            const k1 = (Math.random() * L * 8) | 0; flip(k1);
+            if (K.f === 2) { let k2; do { k2 = (Math.random() * L * 8) | 0; } while (k2 === k1); flip(k2); }
+          } else {
+            const s = (Math.random() * (L * 8 - K.f + 1)) | 0;
+            flip(s); flip(s + K.f - 1);
+            for (let k = s + 1; k < s + K.f - 1; k++) if (Math.random() < 0.5) flip(k);
+          }
+          if (sum256(a) === sum256(b)) mS++;
+          if (crc32(a) === crc32(b)) mC++;
+        }
+        return { n: K.n, mS, mC, N };
+      });
+      const bar = (m, N, col) => `<span class="mbar"><i style="width:${Math.max(m / N * 100 * 4, m ? 1.5 : 0)}%; background:${col}"></i></span>`;
+      $('expOut').innerHTML = '<thead><tr><th>eroarea</th><th>checksum mod 256: nedetectate</th><th>CRC-32: nedetectate</th></tr></thead>' +
+        rows.map((r) => `<tr><td>${r.n}</td><td><b>${r.mS.toLocaleString('ro-RO')}</b> (${(r.mS / r.N * 100).toFixed(2)}%) ${bar(r.mS, r.N, RED)}</td><td><b>${r.mC}</b> (${(r.mC / r.N * 100).toFixed(2)}%) ${bar(r.mC, r.N, GREEN)}</td></tr>`).join('');
+      $('expNote').textContent = 'câte 20.000 de cadre pentru fiecare tip de eroare';
+    }
+    $('expGo').addEventListener('click', () => { $('expNote').textContent = 'rulez…'; setTimeout(run, 30); });
+    setTimeout(run, 400);
+  })();
+
+  // ---------- 08 endianness ----------
+  (function () {
+    const inp = $('enIn');
+    function render() {
+      const s = inp.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 8);
+      const v = parseInt(s.padStart(8, '0'), 16) >>> 0;
+      const be = [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255], le = be.slice().reverse();
+      const mem = (bytes, cls) => bytes.map((b, i) => `<span class="by8 ${cls}">${hex(b)}<small>0x100${i}</small></span>`).join('');
+      const swapped = ((le[0] << 24) | (le[1] << 16) | (le[2] << 8) | le[3]) >>> 0;
+      $('enOut').innerHTML =
+        `<div class="byterow"><span class="lbl">valoarea</span><span class="by8 ctl">0x${hex(v, 8)}<small>${v.toLocaleString('ro-RO')}</small></span></div>` +
+        `<div class="byterow"><span class="lbl">little endian</span>${mem(le, '')}<span class="cap">memoria pe x86 / ARM (host)</span></div>` +
+        `<div class="byterow"><span class="lbl">big endian</span>${mem(be, 'delim')}<span class="cap">după <code>htonl</code>: așa pleacă pe fir</span></div>`;
+      const st = $('enStat');
+      st.className = 'stat ' + (swapped === v ? 'ok' : 'ko');
+      st.textContent = swapped === v ? 'octeți simetrici: aici ordinea nu se vede' : `fără htonl, celălalt capăt citește 0x${hex(swapped, 8)} (${swapped.toLocaleString('ro-RO')})`;
+    }
+    inp.addEventListener('input', render); render();
+  })();
+
+  // ---------- 09 cadru în cadru ----------
+  (function () {
+    const p = pen($('dNest'), 17);
+    const y = 70, h = 60;
+    p.rect(20, y, 110, h, { stroke: BLUE, fill: '#DCE8F9', fillStyle: 'solid' }); p.text(75, y + 36, 'DELIM', 'm', 'middle');
+    p.rect(630, y, 110, h, { stroke: BLUE, fill: '#DCE8F9', fillStyle: 'solid' }); p.text(685, y + 36, 'DELIM', 'm', 'middle');
+    p.rect(130, y, 500, h, { stroke: BLUE, strokeWidth: 2 });
+    p.rect(146, y + 10, 90, h - 20, { stroke: GREEN, fill: '#DDF1E1', fillStyle: 'solid' }); p.text(191, y + 35, 'LEN', 'm', 'middle');
+    p.rect(236, y + 10, 130, h - 20, { stroke: RED, fill: '#F9D6D3', fillStyle: 'solid' }); p.text(301, y + 35, 'CHECKSUM', 'm', 'middle');
+    p.rect(366, y + 10, 248, h - 20, { stroke: ORANGE, fill: '#FAE6D0', fillStyle: 'solid' }); p.text(490, y + 35, 'PAYLOAD (datele voastre)', 'm', 'middle');
+    p.path(`M 20 ${y - 10} L 20 ${y - 20} L 740 ${y - 20} L 740 ${y - 10}`, { stroke: BLUE, strokeWidth: 1.6 });
+    p.text(380, y - 30, 'lab 2: framing, făcut de link_send / link_recv', 'hs', 'middle', BLUE);
+    p.path(`M 146 ${y + h + 10} L 146 ${y + h + 20} L 614 ${y + h + 20} L 614 ${y + h + 10}`, { stroke: GREEN, strokeWidth: 1.6 });
+    p.text(380, y + h + 44, 'lab 3: protocolul vostru, în payload-ul de mai sus', 'hs', 'middle', GREEN);
+    p.text(380, y + h + 68, 'în total, cel mult MTU = 1500 de octeți', 'ts', 'middle');
+  })();
+
+  // ---------- 10 ACK / NACK ----------
+  (function () {
+    const ENC = [
+      { v: 0, label: 'ACK = 1, NACK = 0', a: 0x01, n: 0x00 },
+      { v: 1, label: "ACK = 'A', NACK = 'N'", a: 0x41, n: 0x4E },
+      { v: 2, label: 'ACK = 0xFF, NACK = 0x00', a: 0xFF, n: 0x00 }
+    ];
+    let enc = 0, sentAck = true, rx = ENC[0].a;
+    function render() {
+      const E = ENC[enc], sent = sentAck ? E.a : E.n;
+      const d = pop(E.a ^ E.n), dA = pop(rx ^ E.a), dN = pop(rx ^ E.n);
+      const bits = (v, cls) => [...bin8(v)].map((c) => `<span class="bt ${cls || ''}">${c}</span>`).join('');
+      $('anRows').innerHTML =
+        `<div class="bitrow"><span class="lbl">ACK</span>${bits(E.a)}<span class="cap">&nbsp;0x${hex(E.a)}</span></div>` +
+        `<div class="bitrow"><span class="lbl">NACK</span>${bits(E.n)}<span class="cap">&nbsp;0x${hex(E.n)} · distanța Hamming = <b>${d}</b></span></div>` +
+        `<div class="bitrow"><span class="lbl">primit</span>${[...bin8(rx)].map((c, i) => `<button type="button" class="bt ${((rx ^ sent) >> (7 - i)) & 1 ? 'stuff' : ''}" data-b="${7 - i}" aria-label="inversează bitul ${7 - i}">${c}</button>`).join('')}<span class="cap">&nbsp;apasă pe un bit ca să-l inversezi</span></div>`;
+      const st = $('anStat');
+      const flips = pop(rx ^ sent);
+      let dec = dA < dN ? 'ACK' : dN < dA ? 'NACK' : null;
+      const want = sentAck ? 'ACK' : 'NACK';
+      if (!flips) { st.className = 'stat ok'; st.textContent = `primit exact ${want}`; }
+      else if (!dec) { st.className = 'stat ko'; st.textContent = `${flips} bit${flips > 1 ? 'i' : ''} inversat${flips > 1 ? 'i' : ''}: la fel de aproape de ACK și de NACK, nu se poate decide`; }
+      else if (dec === want) { st.className = 'stat ok'; st.textContent = `${flips} bit${flips > 1 ? 'i' : ''} inversat${flips > 1 ? 'i' : ''}: cel mai apropiat e tot ${dec} (distanțe ${dA} / ${dN})`; }
+      else { st.className = 'stat ko'; st.textContent = `${flips} bit${flips > 1 ? 'i' : ''} inversat${flips > 1 ? 'i' : ''}: emițătorul înțelege ${dec}, dar s-a trimis ${want}!`; }
+    }
+    $('anRows').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-b]'); if (!b) return;
+      rx ^= 1 << +b.dataset.b; render();
+      $('anRows').querySelector(`[data-b="${b.dataset.b}"]`)?.focus();
+    });
+    const resetRx = () => { rx = sentAck ? ENC[enc].a : ENC[enc].n; render(); };
+    seg($('anEnc'), ENC, 0, (v) => { enc = v; resetRx(); });
+    seg($('anSent'), [{ v: 1, label: 'ACK' }, { v: 0, label: 'NACK' }], 1, (v) => { sentAck = !!v; resetRx(); });
+    render();
+
+    // stop-and-wait
+    const svg = $('dSw'), pIn = $('swP');
+    function sim() {
+      const P = +pIn.value / 100; $('swPo').textContent = pIn.value + '%';
+      const ev = [];
+      for (let f = 1; f <= 5; f++) {
+        let tries = 0;
+        while (true) { tries++; const bad = Math.random() < P && tries < 6; ev.push({ f, bad }); if (!bad) break; }
+      }
+      const A = 150, B = 600, top = 50, rowH = 46, H = top + ev.length * rowH + 20;
+      svg.setAttribute('viewBox', `0 0 760 ${H}`);
+      const p = pen(svg, 3); p.clear();
+      p.text(A, 30, 'emițător', 'hs', 'middle'); p.text(B, 30, 'receptor', 'hs', 'middle');
+      p.line(A, 40, A, H - 10, { stroke: MUTE, strokeLineDash: [5, 6], strokeWidth: 1.4 });
+      p.line(B, 40, B, H - 10, { stroke: MUTE, strokeLineDash: [5, 6], strokeWidth: 1.4 });
+      ev.forEach((e, k) => {
+        const y = top + k * rowH;
+        p.arrow(A, y, B, y + 18, { stroke: e.bad ? RED : BLUE, strokeWidth: 1.8, roughness: 0.7 });
+        p.text((A + B) / 2, y + 2, `cadrul ${e.f}` + (e.bad ? ' (stricat)' : ''), 'ms', 'middle', e.bad ? RED : INK);
+        p.arrow(B, y + 24, A, y + 40, { stroke: e.bad ? ORANGE : GREEN, strokeWidth: 1.6, roughness: 0.7 });
+        p.text(B + 12, y + 22, e.bad ? '✗ Frame corrupted' : '✓', 'ms', 'start', e.bad ? RED : GREEN);
+        p.text(A - 12, y + 44, e.bad ? 'NACK → retrimit' : 'ACK', 'ms', 'end', e.bad ? ORANGE : GREEN);
+      });
+      const st = $('swStat');
+      st.className = 'stat info';
+      st.textContent = `${ev.length} trimiteri pentru 5 cadre (${Math.round(5 / ev.length * 100)}% utile)`;
+    }
+    $('swGo').addEventListener('click', sim);
+    pIn.addEventListener('input', () => { $('swPo').textContent = pIn.value + '%'; });
+    sim();
+  })();
+
+  // ---------- mod întunecat ----------
+  const themeBtn = $('themeBtn'), root = document.documentElement;
+  function syncTheme() {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    themeBtn.setAttribute('aria-pressed', String(dark));
+    themeBtn.textContent = dark ? '☀ mod luminos' : '☾ mod întunecat';
+  }
+  themeBtn.addEventListener('click', () => {
+    const dark = root.getAttribute('data-theme') !== 'dark';
+    if (dark) root.setAttribute('data-theme', 'dark'); else root.removeAttribute('data-theme');
+    try { localStorage.setItem('pcom-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    syncTheme();
+  });
+  syncTheme();
+
+  // ---------- copiere ----------
+  document.querySelectorAll('[data-copy]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const code = b.closest('.code').querySelector('code');
+      const sel = () => { const r = document.createRange(); r.selectNodeContents(code); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+      try { navigator.clipboard.writeText(code.innerText).then(() => { b.textContent = 'Copiat'; setTimeout(() => { b.textContent = 'Copiază'; }, 1400); }, sel); } catch (e) { sel(); }
+    });
+  });
+
+  // ---------- tabla curentă ----------
+  const navs = Array.from(document.querySelectorAll('.top nav a'));
+  const boards = Array.from(document.querySelectorAll('.board'));
+  let ticking = false;
+  function markActive() {
+    ticking = false;
+    const line = window.innerHeight / 3; let cur = boards[0];
+    boards.forEach((b) => { if (b.getBoundingClientRect().top <= line) cur = b; });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) cur = boards[boards.length - 1];
+    navs.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + cur.id));
+  }
+  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; setTimeout(markActive, 60); } }, { passive: true });
+  window.addEventListener('resize', markActive);
+  markActive();
+})();
+</script>
+</body>
+</html>

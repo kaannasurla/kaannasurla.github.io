@@ -5,10 +5,26 @@
 :root{
   --bg:#03090d; --panel:#0a161d; --panel2:#0d1c25; --line:#16303b;
   --text:#d9e6ec; --muted:#7f97a3; --accent:#3ee0b5; --accent2:#4aa8ff;
+  --accent-hover:#5ff0c8; --accent-soft:rgba(62,224,181,.08);
+  --nav-bg:rgba(3,9,13,.75); --row-hover:rgba(255,255,255,.02);
+  --ph1:#0f2a33; --ph2:#0a161d;
+  /* culorile fundalului animat (r,g,b) */
+  --dot:62,224,181; --link:74,168,255; --dot-alpha:.55; --link-alpha:.18;
+  color-scheme:dark;
+}
+/* ---------- Tema luminoasă ---------- */
+[data-theme="light"]{
+  --bg:#f5f8f7; --panel:#ffffff; --panel2:#e9efee; --line:#d5e0de;
+  --text:#14232b; --muted:#566b74; --accent:#0a7f63; --accent2:#1f63c2;
+  --accent-hover:#0c9473; --accent-soft:rgba(10,127,99,.07);
+  --nav-bg:rgba(245,248,247,.82); --row-hover:rgba(0,0,0,.025);
+  --ph1:#e3ecea; --ph2:#f3f7f6;
+  --dot:10,127,99; --link:31,99,194; --dot-alpha:.45; --link-alpha:.16;
+  color-scheme:light;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:"Space Grotesk",system-ui,sans-serif;line-height:1.65;overflow-x:hidden}
+body{transition:background .3s,color .3s;background:var(--bg);color:var(--text);font-family:"Space Grotesk",system-ui,sans-serif;line-height:1.65;overflow-x:hidden}
 canvas#bg{position:fixed;inset:0;z-index:0;pointer-events:none}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
@@ -16,12 +32,13 @@ code,.mono{font-family:"JetBrains Mono",monospace}
 
 /* ---------- Navigație ---------- */
 nav{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:20px;
-    padding:18px 6vw;background:rgba(3,9,13,.75);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+    padding:18px 6vw;background:var(--nav-bg);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 nav .logo{font-family:"JetBrains Mono",monospace;color:var(--accent);font-size:15px;white-space:nowrap}
 nav ul{list-style:none;display:flex;gap:26px;overflow-x:auto;scrollbar-width:none}
 nav ul::-webkit-scrollbar{display:none}
 nav ul a{color:var(--muted);font-size:15px;white-space:nowrap;padding-bottom:4px;border-bottom:2px solid transparent}
 nav ul a:hover{color:var(--text);text-decoration:none}
+.nav-right{display:flex;align-items:center;gap:22px;min-width:0}
 nav ul a.active{color:var(--accent);border-bottom-color:var(--accent)}
 
 /* ---------- Structură ---------- */
@@ -36,9 +53,9 @@ h1{font-size:clamp(42px,7vw,76px);line-height:1.05;font-weight:700}
 .lead{max-width:600px;color:var(--muted);font-size:18px}
 .btns{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap}
 .btn{display:inline-block;padding:12px 22px;border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-size:15px;transition:.2s}
-.btn:hover{background:rgba(62,224,181,.1);text-decoration:none}
+.btn:hover{background:var(--accent-soft);text-decoration:none}
 .btn.solid{background:var(--accent);color:var(--bg)}
-.btn.solid:hover{background:#5ff0c8}
+.btn.solid:hover{background:var(--accent-hover)}
 
 /* ---------- Antet pentru paginile interioare ---------- */
 .page-head{padding:150px 0 30px}
@@ -58,7 +75,7 @@ p.muted,.muted{color:var(--muted)}
 .about{display:grid;grid-template-columns:1.6fr 1fr;gap:50px;align-items:start}
 .about p{color:var(--muted);margin-bottom:14px}
 .photo{aspect-ratio:1;border-radius:14px;border:1px solid var(--line);
-       background:linear-gradient(135deg,#0f2a33,#0a161d);display:flex;align-items:center;justify-content:center;
+       background:linear-gradient(135deg,var(--ph1),var(--ph2));display:flex;align-items:center;justify-content:center;
        color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:13px;overflow:hidden}
 .photo img{width:100%;height:100%;object-fit:cover}
 .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;list-style:none}
@@ -86,7 +103,7 @@ a.card:hover,.card:hover{transform:translateY(-5px);border-color:var(--accent);t
 /* Card mare de proiect (pagina Proiecte) */
 .project{display:grid;grid-template-columns:1fr 1.3fr;gap:30px;align-items:center;margin-bottom:60px}
 .project:nth-child(even) .shot{order:2}
-.project .shot{aspect-ratio:16/10;border-radius:12px;border:1px solid var(--line);background:linear-gradient(135deg,#0f2a33,#0a161d);
+.project .shot{aspect-ratio:16/10;border-radius:12px;border:1px solid var(--line);background:linear-gradient(135deg,var(--ph1),var(--ph2));
                display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:13px;overflow:hidden}
 .project .shot img{width:100%;height:100%;object-fit:cover}
 .project .kind{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--accent)}
@@ -98,7 +115,7 @@ a.card:hover,.card:hover{transform:translateY(-5px);border-color:var(--accent);t
 .fact .k{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .fact .v{font-size:17px;margin-top:4px}
 
-.notice{border-left:3px solid var(--accent);background:rgba(62,224,181,.06);padding:16px 20px;border-radius:0 10px 10px 0;margin-bottom:14px}
+.notice{border-left:3px solid var(--accent);background:var(--accent-soft);padding:16px 20px;border-radius:0 10px 10px 0;margin-bottom:14px}
 .notice .date{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--accent)}
 
 table{width:100%;border-collapse:collapse;font-size:15px}
@@ -106,7 +123,7 @@ th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vert
 th{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:400}
 td:first-child{font-family:"JetBrains Mono",monospace;color:var(--accent2);white-space:nowrap}
 td .sub{display:block;color:var(--muted);font-size:14px}
-tr:hover td{background:rgba(255,255,255,.02)}
+tr:hover td{background:var(--row-hover)}
 .table-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
 
 .files{list-style:none}
@@ -152,3 +169,13 @@ footer{position:relative;z-index:1;text-align:center;padding:60px 0 30px;color:v
 /* Etichete și linkuri pentru proiectele mari */
 .project .tags{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--accent2)}
 .project .links{display:flex;gap:18px;font-size:14px;margin-top:12px}
+
+/* ---------- Butonul de schimbare a temei ---------- */
+.theme-toggle{flex:none;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--panel);
+  color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s}
+.theme-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.theme-toggle svg{width:18px;height:18px}
+.theme-toggle .sun{display:none}
+[data-theme="light"] .theme-toggle .sun{display:block}
+[data-theme="light"] .theme-toggle .moon{display:none}
+@media (max-width:720px){ .nav-right{width:100%;justify-content:space-between;gap:10px} nav ul{gap:12px} nav ul a{font-size:14px} .theme-toggle{width:32px;height:32px} }

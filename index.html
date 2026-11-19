@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Numele Tău — Despre mine</title>
+<meta name="description" content="Site personal — Numele Tău">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="acasa">
+<canvas id="bg"></canvas>
+
+<nav>
+  <a class="logo" href="index.html">&lt;numele.tau /&gt;</a>
+  <ul>
+    <li><a href="index.html" data-page="acasa">Acasă</a></li>
+    <li><a href="pasiuni.html" data-page="pasiuni">Pasiuni</a></li>
+    <li><a href="proiecte.html" data-page="proiecte">Proiecte</a></li>
+    <li><a href="predare.html" data-page="predare">Predare</a></li>
+    <li><a href="index.html#contact" data-page="contact">Contact</a></li>
+  </ul>
+</nav>
+
+<main>
+  <!-- ===== HERO ===== -->
+  <section class="hero">
+    <p class="hello">Salut, eu sunt</p>
+    <h1>Numele Tău.</h1>
+    <p class="tagline">Teaching Assistant · ce mai faci, într-o propoziție.</p>
+    <p class="lead">Două-trei rânduri despre tine: cu ce te ocupi, ce predai, ce te pasionează și la ce lucrezi acum.</p>
+    <div class="btns">
+      <a class="btn solid" href="predare.html">Materiile mele</a>
+      <a class="btn" href="proiecte.html">Proiecte</a>
+      <a class="btn" href="#contact">Contact</a>
+    </div>
+  </section>
+
+  <!-- ===== DESPRE ===== -->
+  <section id="despre" class="reveal">
+    <h2><span>01.</span> Despre mine</h2>
+    <div class="about">
+      <div>
+        <p>Un paragraf despre povestea ta: de unde ai pornit, ce ai studiat și cum ai ajuns la ce faci azi.</p>
+        <p>Un paragraf despre activitatea de Teaching Assistant: ce materii susții, ce îți place la predare.</p>
+        <p>Câteva lucruri cu care lucrez des:</p>
+        <ul class="chips">
+          <li>Competența 1</li><li>Competența 2</li><li>Competența 3</li>
+          <li>Competența 4</li><li>Competența 5</li><li>Competența 6</li>
+        </ul>
+      </div>
+      <!-- Pune o poză în repository (ex. poza.jpg) și înlocuiește textul cu: <img src="poza.jpg" alt="Numele Tău"> -->
+      <div class="photo">poza ta aici</div>
+    </div>
+  </section>
+
+  <!-- ===== EXPLOREAZĂ ===== -->
+  <section class="reveal">
+    <h2><span>02.</span> Explorează</h2>
+    <div class="grid">
+      <a class="card" href="predare.html">
+        <div class="icon">🎓</div>
+        <h3>Predare</h3>
+        <p>Laboratoare, materiale și anunțuri pentru Numerical Methods și Communication Protocols.</p>
+        <span class="more">Vezi materiile →</span>
+      </a>
+      <a class="card" href="proiecte.html">
+        <div class="icon">🛠️</div>
+        <h3>Proiecte</h3>
+        <p>Lucruri pe care le-am construit, de la proiecte de cercetare la proiecte personale.</p>
+        <span class="more">Vezi proiectele →</span>
+      </a>
+      <a class="card" href="pasiuni.html">
+        <div class="icon">✨</div>
+        <h3>Pasiuni</h3>
+        <p>Ce fac când nu sunt la birou sau în laborator.</p>
+        <span class="more">Descoperă →</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ===== EXPERIENȚĂ ===== -->
+  <section id="experienta" class="reveal">
+    <h2><span>03.</span> Experiență</h2>
+    <div class="timeline">
+      <div class="item">
+        <div class="when">2024 — prezent</div>
+        <h3>Teaching Assistant <small>@ Universitate</small></h3>
+        <p>Laboratoare de Numerical Methods și Communication Protocols.</p>
+      </div>
+      <div class="item">
+        <div class="when">2022 — 2024</div>
+        <h3>Rol anterior <small>@ Companie</small></h3>
+        <p>Responsabilități principale și ce ai învățat.</p>
+      </div>
+      <div class="item">
+        <div class="when">2018 — 2022</div>
+        <h3>Studii <small>@ Universitate</small></h3>
+        <p>Specializarea și orice proiect sau distincție relevantă.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CONTACT ===== -->
+  <section id="contact" class="contact reveal">
+    <h2><span>04.</span> Contact</h2>
+    <p>Dacă vrei să colaborăm sau ai o întrebare legată de laboratoare, scrie-mi.</p>
+    <a class="btn solid" href="mailto:email@exemplu.ro">Trimite un email</a>
+    <div class="socials">
+      <a href="https://github.com/numeutilizator" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.linkedin.com/in/numeutilizator" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="#" target="_blank" rel="noopener">Instagram</a>
+    </div>
+  </section>
+</main>
+
+<footer>© <span class="an"></span> Numele Tău · făcut cu GitHub Pages</footer>
+<script src="script.js"></script>
+</body>
+</html>

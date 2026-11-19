@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Communication Protocols — Numele Tău</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="predare">
+<canvas id="bg"></canvas>
+
+<nav>
+  <a class="logo" href="index.html">&lt;numele.tau /&gt;</a>
+  <ul>
+    <li><a href="index.html" data-page="acasa">Acasă</a></li>
+    <li><a href="pasiuni.html" data-page="pasiuni">Pasiuni</a></li>
+    <li><a href="proiecte.html" data-page="proiecte">Proiecte</a></li>
+    <li><a href="predare.html" data-page="predare">Predare</a></li>
+    <li><a href="index.html#contact" data-page="contact">Contact</a></li>
+  </ul>
+</nav>
+
+<main>
+  <header class="page-head">
+    <div class="crumbs"><a href="index.html">acasă</a> / <a href="predare.html">predare</a> / communication-protocols</div>
+    <h1>Communication Protocols</h1>
+    <p class="lead">Laboratorul de Protocoale de Comunicație: cum circulă datele într-o rețea, de la cadre și pachete până la aplicații, cu multă programare pe socket-uri.</p>
+  </header>
+
+  <!-- ===== INFORMAȚII ===== -->
+  <section class="reveal" style="padding-top:10px">
+    <div class="facts">
+      <div class="fact"><div class="k">Laborator</div><div class="v">Miercuri, 12:00–14:00</div></div>
+      <div class="fact"><div class="k">Sală</div><div class="v">Corp X, sala 000</div></div>
+      <div class="fact"><div class="k">Grupe</div><div class="v">322CA, 322CB</div></div>
+      <div class="fact"><div class="k">Curs</div><div class="v">Prof. Nume Prenume</div></div>
+      <div class="fact"><div class="k">Limbaj / unelte</div><div class="v">C, Linux, Wireshark</div></div>
+    </div>
+  </section>
+
+  <!-- ===== ANUNȚURI ===== -->
+  <section class="reveal">
+    <h2><span>01.</span> Anunțuri</h2>
+    <div class="notice">
+      <div class="date">19.11.2026</div>
+      Tema 2 (client–server TCP) e disponibilă. Termen de predare: 10 decembrie, ora 23:59.
+    </div>
+    <div class="notice">
+      <div class="date">29.10.2026</div>
+      Pentru laboratorul de săptămâna viitoare, instalați Wireshark pe laptop.
+    </div>
+  </section>
+
+  <!-- ===== LABORATOARE ===== -->
+  <section class="reveal">
+    <h2><span>02.</span> Laboratoare</h2>
+    <p class="muted" style="margin-bottom:18px">Pune fișierele în folderul <code>materiale/communication-protocols/</code> din repository și linkurile de mai jos vor funcționa.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Săpt.</th><th>Subiect</th><th>Materiale</th></tr></thead>
+        <tbody>
+          <tr><td>01</td><td>Introducere. Modelele OSI și TCP/IP<span class="sub">mediul de lucru Linux, unelte de bază</span></td><td><a href="materiale/communication-protocols/lab01.pdf">PDF</a></td></tr>
+          <tr><td>02</td><td>Nivelul legătură de date<span class="sub">încadrare, detecția erorilor: paritate, checksum, CRC</span></td><td><a href="materiale/communication-protocols/lab02.pdf">PDF</a> · <a href="materiale/communication-protocols/lab02.zip">schelet</a></td></tr>
+          <tr><td>03</td><td>Protocoale de transmisie fiabilă<span class="sub">stop-and-wait, fereastră glisantă, Go-Back-N</span></td><td><a href="materiale/communication-protocols/lab03.pdf">PDF</a></td></tr>
+          <tr><td>04</td><td>Ethernet și ARP<span class="sub">adrese MAC, switch-uri, analiză cu Wireshark</span></td><td><a href="materiale/communication-protocols/lab04.pdf">PDF</a></td></tr>
+          <tr><td>05</td><td>IPv4 și rutare<span class="sub">adresare, subrețele, tabela de rutare, longest prefix match</span></td><td><a href="materiale/communication-protocols/lab05.pdf">PDF</a></td></tr>
+          <tr><td>06</td><td>ICMP și unelte de diagnostic<span class="sub">ping, traceroute</span></td><td><a href="materiale/communication-protocols/lab06.pdf">PDF</a></td></tr>
+          <tr><td>07</td><td>Test de laborator 1</td><td>—</td></tr>
+          <tr><td>08</td><td>Socket-uri UDP<span class="sub">API-ul BSD sockets în C</span></td><td><a href="materiale/communication-protocols/lab08.pdf">PDF</a></td></tr>
+          <tr><td>09</td><td>Socket-uri TCP<span class="sub">conexiuni, client–server</span></td><td><a href="materiale/communication-protocols/lab09.pdf">PDF</a></td></tr>
+          <tr><td>10</td><td>Multiplexarea I/O<span class="sub">select / poll, servere cu mai mulți clienți</span></td><td><a href="materiale/communication-protocols/lab10.pdf">PDF</a></td></tr>
+          <tr><td>11</td><td>DNS</td><td><a href="materiale/communication-protocols/lab11.pdf">PDF</a></td></tr>
+          <tr><td>12</td><td>HTTP și clienți web</td><td><a href="materiale/communication-protocols/lab12.pdf">PDF</a></td></tr>
+          <tr><td>13</td><td>Securitate: TLS și noțiuni de bază</td><td><a href="materiale/communication-protocols/lab13.pdf">PDF</a></td></tr>
+          <tr><td>14</td><td>Test de laborator 2</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== TEME ===== -->
+  <section class="reveal">
+    <h2><span>03.</span> Teme</h2>
+    <ul class="files">
+      <li><a href="materiale/communication-protocols/tema1.pdf">Tema 1 — Router (forwarding)</a><span>termen: 12.11.2026</span></li>
+      <li><a href="materiale/communication-protocols/tema2.pdf">Tema 2 — Aplicație client–server TCP</a><span>termen: 10.12.2026</span></li>
+      <li><span style="color:var(--text)">Tema 3 — Client HTTP</span><span>se publică în săpt. 11</span></li>
+    </ul>
+  </section>
+
+  <!-- ===== EVALUARE ===== -->
+  <section class="reveal">
+    <h2><span>04.</span> Evaluare (laborator)</h2>
+    <div class="grading">
+      <div class="bar"><span>Activitate la laborator</span><div class="track"><div class="fill" style="width:20%"></div></div><span class="pct">20%</span></div>
+      <div class="bar"><span>Teme</span><div class="track"><div class="fill" style="width:50%"></div></div><span class="pct">50%</span></div>
+      <div class="bar"><span>Teste de laborator</span><div class="track"><div class="fill" style="width:30%"></div></div><span class="pct">30%</span></div>
+    </div>
+    <p class="muted" style="margin-top:18px">Procentele sunt un exemplu: pune aici regulile oficiale din fișa disciplinei.</p>
+  </section>
+
+  <!-- ===== RESURSE ===== -->
+  <section class="reveal">
+    <h2><span>05.</span> Resurse utile</h2>
+    <ul class="files">
+      <li><a href="https://www.wireshark.org" target="_blank" rel="noopener">Wireshark</a><span>analizor de pachete</span></li>
+      <li><a href="https://beej.us/guide/bgnet/" target="_blank" rel="noopener">Beej's Guide to Network Programming</a><span>socket-uri în C, explicat clar</span></li>
+      <li><a href="https://www.rfc-editor.org" target="_blank" rel="noopener">RFC Editor</a><span>specificațiile oficiale ale protocoalelor</span></li>
+    </ul>
+  </section>
+
+  <!-- ===== ÎNTREBĂRI ===== -->
+  <section class="reveal">
+    <h2><span>06.</span> Întrebări frecvente</h2>
+    <details><summary>Pot lucra pe Windows?</summary><p>Explică aici ce mediu e acceptat (Linux nativ, WSL, mașină virtuală).</p></details>
+    <details><summary>Cum se trimit temele?</summary><p>Scrie platforma de predare și formatul arhivei.</p></details>
+    <details><summary>Ce se întâmplă dacă predau tema cu întârziere?</summary><p>Scrie aici regula pentru întârzieri.</p></details>
+  </section>
+</main>
+
+<footer>© <span class="an"></span> Numele Tău · făcut cu GitHub Pages</footer>
+<script src="script.js"></script>
+</body>
+</html>
